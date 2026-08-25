@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم - بوت قصر زهرة الياسمين</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #0f172a; color: #fff; margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: auto; }
+        .header { text-align: center; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-top: 20px; }
+        .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
+        .status-badge { display: inline-block; padding: 5px 12px; border-radius: 20px; background: #334155; font-size: 14px; }
+        input, textarea, button { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; }
+        button { background: #0284c7; border: none; font-weight: bold; cursor: pointer; margin-top: 15px; }
+        button:hover { background: #0369a1; }
+        .pair-code { font-size: 24px; font-weight: bold; color: #4ade80; letter-spacing: 2px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>🌸 لوحة إدارك بوت قصر زهرة الياسمين</h2>
+            <span class="status-badge" id="botStatus">جاري التحقق...</span>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3>📊 إحصائيات النظام</h3>
+                <p>عدد الرسائل التي تم رد عليها: <b id="msgCount">0</b></p>
+            </div>
+
+            <div class="card">
+                <h3>🔗 ربط حساب جديد</h3>
+                <input type="text" id="phone" placeholder="أدخل رقم الهاتف (مثال: 966504790504)">
+                <button onclick="requestPairing()">طلب رمز الاقتران</button>
+                <div class="pair-code" id="pairCode"></div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+            <h3>⚙️ إعدادات الرد التلقائي</h3>
+            <label>نص الترحيب:</label>
+            <textarea id="welcomeMsg" rows="3"></textarea>
+            
+            <label>رابط الصورة:</label>
+            <input type="text" id="logoUrl">
+            
+            <label>رقم هاتف جهة الاتصال:</label>
+            <input type="text" id="phoneContact">
+            
+            <button onclick="saveSettings()" style="background: #16a34a;">حفظ التغييرات</button>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStatus() {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            document.getElementById('botStatus').innerText = data.status;
+            document.getElementById('msgCount').innerText = data.count;
+            if(data.code) document.getElementById('pairCode').innerText = "كود الربط: " + data.code;
+            
+            if(!document.getElementById('welcomeMsg').value) {
+                document.getElementById('welcomeMsg').value = data.settings.welcomeMsg;
+                document.getElementById('logoUrl').value = data.settings.logoUrl;
+                document.getElementById('phoneContact').value = data.settings.phoneContact;
+            }
+        }
+
+        async function requestPairing() {
+            const phone = document.getElementById('phone').value;
+            const res = await fetch('/api/start-pair', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ phone })
+            });
+            const data = await res.json();
+            if(data.code) document.getElementById('pairCode').innerText = "كود الربط: " + data.code;
+        }
+
+        async function saveSettings() {
+            const welcomeMsg = document.getElementById('welcomeMsg').value;
+            const logoUrl = document.getElementById('logoUrl').value;
+            const phoneContact = document.getElementById('phoneContact').value;
+
+            await fetch('/api/update-settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ welcomeMsg, logoUrl, phoneContact })
+            });
+            alert('تم حفظ الإعدادات!');
+        }
+
+        setInterval(fetchStatus, 3000);
+        fetchStatus();
+    </script>
+</body>
+</html>
