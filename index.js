@@ -1,51 +1,46 @@
 import express from 'express';
-import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
 import pino from 'pino';
-import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.use(express.json());
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 
-let sock = null;
-let botStatus = "متوقف";
-let qrCodeData = "";
-let pairingCode = "";
-let messagesCount = 0;
+let sock;
+let currentPairingCode = '';
+let botStatus = 'متوقف';
+let repliedCount = 0;
+let welcomeText = "مرحباً بك في *قصر زهرة الياسمين* للحفلات والمناسبات 🌸";
 
-// إعدادات الرد التلقائي لقصر زهرة الياسمين
-let botSettings = {
-    welcomeMsg: "مرحباً بك في *قصر زهرة الياسمين* للحفلات والمناسبات ✨\nيسعدنا خدمتكم وتلبية كافة احتياجاتكم.",
-    logoUrl: "https://i.ibb.co/vzZ3qg8/crystal-logo.jpg",
-    phoneContact: "+966504790504"
-};
-
-async function startWhatsAppBot() {
-    botStatus = "جاري الاتصال...";
-    const { state, saveCreds } = await useMultiFileAuthState('./session_auth');
-    const { version } = await fetchLatestBaileysVersion();
+async function startBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('session_auth');
 
     sock = makeWASocket({
-        version,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
-        browser: ["قصر زهرة الياسمين", "Chrome", "1.0.0"]
+        browser: ["Jasmin Hall Bot", "Chrome", "20.0.04"]
     });
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
-        const { connection } = update;
-        if (connection === 'open') {
-            botStatus = "نشط ويعمل 🟢";
-            qrCodeData = "";
-            pairingCode = "";
-        } else if (connection === 'close') {
-            botStatus = "متوقف 🔴";
+        const { connection, lastDisconnect } = update;
+        if (connection === 'close') {
+            botStatus = 'متوقف';
+            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
+            if (shouldReconnect) startBot();
+        } else if (connection === 'open') {
+            botStatus = 'متصل';
+            currentPairingCode = '';
+            console.log('✅ تم الاتصال بنجاح بواتساب!');
         }
     });
 
@@ -54,54 +49,60 @@ async function startWhatsAppBot() {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
 
-        messagesCount++;
-        const chat = m.key.remoteJid;
-
-        try {
-            // إرسال الصورة والترحيب
-            await sock.sendMessage(chat, { 
-                image: { url: botSettings.logoUrl }, 
-                caption: botSettings.welcomeMsg 
-            }, { quoted: m });
-
-            // إرسال جهة الاتصال
-            const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:استفسارات قصر زهرة الياسمين\nTEL;TYPE=CELL;type=VOICE;waid=${botSettings.phoneContact.replace('+','')}:${botSettings.phoneContact}\nEND:VCARD`;
-            await sock.sendMessage(chat, {
-                contacts: { displayName: 'قصر زهرة الياسمين', contacts: [{ vcard }] }
-            });
-        } catch (e) {
-            console.error(e);
-        }
+        const from = m.key.remoteJid;
+        await sock.sendMessage(from, { text: welcomeText });
+        repliedCount++;
     });
 }
 
-// APIs التحكم بالواجهة
+// API للحصول على حالة البوت واحصائياته
 app.get('/api/status', (req, res) => {
-    res.json({ status: botStatus, code: pairingCode, count: messagesCount, settings: botSettings });
+    res.json({
+        status: botStatus,
+        repliedCount: repliedCount,
+        pairingCode: currentPairingCode,
+        welcomeText: welcomeText
+    });
 });
 
-app.post('/api/start-pair', async (req, res) => {
-    const { phone } = req.body;
-    if (!phone) return res.status(400).json({ error: 'أدخل رقم الهاتف' });
-    
-    await startWhatsAppBot();
-    setTimeout(async () => {
-        try {
-            const cleanPhone = phone.replace(/[^0-9]/g, '');
-            pairingCode = await sock.requestPairingCode(cleanPhone);
-            res.json({ success: true, code: pairingCode });
-        } catch (e) {
-            res.status(500).json({ error: 'تعذر استخراج كود الاقتران' });
+// API طلب كود الاقتران
+app.post('/api/pair', async (req, res) => {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) {
+        return res.status(400).json({ success: false, error: 'يرجى إدخال رقم الهاتف' });
+    }
+
+    try {
+        const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
+        if (!sock || botStatus === 'متصل') {
+            await startBot();
         }
-    }, 3000);
+        
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(cleanedNumber);
+                currentPairingCode = code;
+                res.json({ success: true, code: code });
+            } catch (err) {
+                res.status(500).json({ success: false, error: 'تعذر الحصول على الكود، تأكد من الرقم' });
+            }
+        }, 3000);
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
-app.post('/api/update-settings', (req, res) => {
-    const { welcomeMsg, logoUrl, phoneContact } = req.body;
-    if (welcomeMsg) botSettings.welcomeMsg = welcomeMsg;
-    if (logoUrl) botSettings.logoUrl = logoUrl;
-    if (phoneContact) botSettings.phoneContact = phoneContact;
-    res.json({ success: true, message: 'تم تحديث الإعدادات بنجاح' });
+// API تحديث رسالة الترحيب
+app.post('/api/settings', (req, res) => {
+    const { text } = req.body;
+    if (text) {
+        welcomeText = text;
+        return res.json({ success: true, message: 'تم تحديث النص بنجاح' });
+    }
+    res.status(400).json({ success: false, error: 'النص فارغ' });
 });
 
-app.listen(PORT, () => console.log(`🚀 Web Interface running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+    startBot();
+});
