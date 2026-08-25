@@ -37,7 +37,7 @@
   button { background: #0077b6; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
   button:hover { background: #0284c7; }
 
-  /* خط التحميل (Progress Bar) */
+  /* Progress Bar */
   .progress-container {
     width: 100%; background: rgba(255, 255, 255, 0.1); border-radius: 10px;
     height: 8px; margin-top: 15px; overflow: hidden; display: none;
@@ -49,32 +49,29 @@
 
   .code-display {
     margin-top: 15px; font-size: 1.8rem; font-weight: 900; color: var(--accent-green);
-    letter-spacing: 4px; text-align: center; display: none;
+    letter-spacing: 4px; text-align: center; display: none; background: rgba(0,255,136,0.1);
+    padding: 10px; border-radius: 12px; border: 1px dashed var(--accent-green);
   }
 </style>
 </head>
 <body>
 
 <div class="container">
-  <!-- حالة الاتصال -->
   <div class="status-badge">
     <div id="statusDot" class="dot"></div>
     <span id="statusText">متوقف</span>
   </div>
 
-  <!-- الإحصائيات -->
   <div class="card">
     <h2>📊 إحصائيات النظام</h2>
     <p>عدد الرسائل التي تم رد عليها: <b id="repliedCount" style="color: var(--accent-blue);">0</b></p>
   </div>
 
-  <!-- ربط الحساب -->
   <div class="card">
     <h2>🔗 ربط حساب جديد</h2>
-    <input type="text" id="phoneInput" placeholder="أدخل رقم الهاتف (مثال: 967717521122)">
+    <input type="text" id="phoneInput" placeholder="أدخل الرقم مع مفتاح الدولة (مثل: 967717521122)">
     <button onclick="requestPairingCode()">طلب رمز الاقتران</button>
     
-    <!-- خط التحميل عند الانتظار -->
     <div id="progressContainer" class="progress-container">
       <div id="progressBar" class="progress-bar"></div>
     </div>
@@ -82,7 +79,6 @@
     <div id="codeDisplay" class="code-display"></div>
   </div>
 
-  <!-- الإعدادات -->
   <div class="card">
     <h2>⚙️ إعدادات الرد التلقائي</h2>
     <label style="font-size: 0.9rem; color: #ccc;">نص الترحيب:</label>
@@ -92,8 +88,6 @@
 </div>
 
 <script>
-  let statusInterval;
-
   async function fetchStatus() {
     try {
       const res = await fetch('/api/status');
@@ -127,15 +121,15 @@
 
     codeDisplay.style.display = 'none';
     progressContainer.style.display = 'block';
-    progressBar.style.width = '15%';
+    progressBar.style.width = '20%';
 
-    let p = 15;
+    let p = 20;
     const timer = setInterval(() => {
       if (p < 85) {
-        p += 15;
+        p += 10;
         progressBar.style.width = p + '%';
       }
-    }, 400);
+    }, 300);
 
     try {
       const res = await fetch('/api/pair', {
@@ -150,16 +144,16 @@
         progressBar.style.width = '100%';
         setTimeout(() => {
           progressContainer.style.display = 'none';
-          codeDisplay.textContent = 'كود الربط: ' + data.code;
+          codeDisplay.textContent = data.code;
           codeDisplay.style.display = 'block';
-        }, 400);
+        }, 300);
       } else {
         alert(data.error);
         progressContainer.style.display = 'none';
       }
     } catch (err) {
       clearInterval(timer);
-      alert('حدث خطأ في طلب الكود');
+      alert('حدث خطأ أثناء التواصل مع السيرفر');
       progressContainer.style.display = 'none';
     }
   }
