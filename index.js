@@ -1,5 +1,5 @@
 import express from 'express';
-import { makeWASocket, useMultiFileAuthState, DisconnectReason } from '@whiskeysockets/baileys';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,20 +13,22 @@ const PORT = process.env.PORT || 8080;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-let sock;
+let sock = null;
 let currentPairingCode = '';
 let botStatus = 'متوقف';
 let repliedCount = 0;
 let welcomeText = "مرحباً بك في *قصر زهرة الياسمين* للحفلات والمناسبات 🌸";
 
-async function startBot() {
+async function initBaileys() {
     const { state, saveCreds } = await useMultiFileAuthState('session_auth');
+    const { version } = await fetchLatestBaileysVersion();
 
     sock = makeWASocket({
+        version,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
-        browser: ["Jasmin Hall Bot", "Chrome", "20.0.04"]
+        browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -35,8 +37,10 @@ async function startBot() {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
             botStatus = 'متوقف';
-            const shouldReconnect = (lastDisconnect?.error)?.output?.statusCode !== DisconnectReason.loggedOut;
-            if (shouldReconnect) startBot();
+            const statusCode = (lastDisconnect?.error)?.output?.statusCode;
+            if (statusCode !== DisconnectReason.loggedOut) {
+                initBaileys();
+            }
         } else if (connection === 'open') {
             botStatus = 'متصل';
             currentPairingCode = '';
@@ -55,44 +59,50 @@ async function startBot() {
     });
 }
 
-// API للحصول على حالة البوت واحصائياته
+// تشغيل النظام عند البدء
+initBaileys();
+
+// APIs
 app.get('/api/status', (req, res) => {
     res.json({
         status: botStatus,
         repliedCount: repliedCount,
-        pairingCode: currentPairingCode,
         welcomeText: welcomeText
     });
 });
 
-// API طلب كود الاقتران
 app.post('/api/pair', async (req, res) => {
-    const { phoneNumber } = req.body;
+    let { phoneNumber } = req.body;
     if (!phoneNumber) {
         return res.status(400).json({ success: false, error: 'يرجى إدخال رقم الهاتف' });
     }
 
     try {
         const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
-        if (!sock || botStatus === 'متصل') {
-            await startBot();
+
+        if (!sock) {
+            await initBaileys();
         }
-        
-        setTimeout(async () => {
-            try {
-                const code = await sock.requestPairingCode(cleanedNumber);
-                currentPairingCode = code;
-                res.json({ success: true, code: code });
-            } catch (err) {
-                res.status(500).json({ success: false, error: 'تعذر الحصول على الكود، تأكد من الرقم' });
-            }
-        }, 3000);
+
+        // إتاحة وقت بسيط لاستجابة السيرفر
+        if (!sock.authState.creds.registered) {
+            setTimeout(async () => {
+                try {
+                    const code = await sock.requestPairingCode(cleanedNumber);
+                    currentPairingCode = code;
+                    return res.json({ success: true, code: code });
+                } catch (err) {
+                    return res.status(500).json({ success: false, error: 'تعذر الحصول على الكود، تأكد من الرقم ورمز الدولة' });
+                }
+            }, 2000);
+        } else {
+            res.json({ success: false, error: 'الجهاز مقترن بالفعل!' });
+        }
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
 });
 
-// API تحديث رسالة الترحيب
 app.post('/api/settings', (req, res) => {
     const { text } = req.body;
     if (text) {
@@ -102,7 +112,4 @@ app.post('/api/settings', (req, res) => {
     res.status(400).json({ success: false, error: 'النص فارغ' });
 });
 
-app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
-    startBot();
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
