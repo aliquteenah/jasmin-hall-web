@@ -1,99 +1,186 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة تحكم - بوت قصر زهرة الياسمين</title>
-    <style>
-        body { font-family: system-ui, sans-serif; background: #0f172a; color: #fff; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: auto; }
-        .header { text-align: center; border-bottom: 1px solid #334155; padding-bottom: 15px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 15px; margin-top: 20px; }
-        .card { background: #1e293b; padding: 20px; border-radius: 12px; border: 1px solid #334155; }
-        .status-badge { display: inline-block; padding: 5px 12px; border-radius: 20px; background: #334155; font-size: 14px; }
-        input, textarea, button { width: 100%; padding: 10px; margin-top: 8px; border-radius: 6px; border: 1px solid #475569; background: #0f172a; color: #fff; box-sizing: border-box; }
-        button { background: #0284c7; border: none; font-weight: bold; cursor: pointer; margin-top: 15px; }
-        button:hover { background: #0369a1; }
-        .pair-code { font-size: 24px; font-weight: bold; color: #4ade80; letter-spacing: 2px; text-align: center; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>قصر زهرة الياسمين - لوحة التحكم</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-color: #0b132b;
+    --card-bg: #1c2541;
+    --accent-blue: #00f3ff;
+    --accent-green: #00ff88;
+    --accent-red: #ff3b5c;
+    --text-color: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Tajawal', sans-serif; }
+  body { background: var(--bg-color); color: var(--text-color); padding: 20px; display: flex; justify-content: center; }
+  .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 20px; }
+  
+  .status-badge {
+    align-self: center; padding: 8px 25px; border-radius: 50px; font-weight: bold; font-size: 1.1rem;
+    display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.05);
+  }
+  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent-red); }
+  .dot.online { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+
+  .card { background: var(--card-bg); border-radius: 20px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.08); }
+  .card h2 { font-size: 1.2rem; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+
+  input, textarea, button {
+    width: 100%; padding: 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.2);
+    background: #0b132b; color: #fff; font-size: 1rem; margin-top: 10px; outline: none; text-align: center;
+  }
+
+  button { background: #0077b6; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
+  button:hover { background: #0284c7; }
+
+  /* خط التحميل (Progress Bar) */
+  .progress-container {
+    width: 100%; background: rgba(255, 255, 255, 0.1); border-radius: 10px;
+    height: 8px; margin-top: 15px; overflow: hidden; display: none;
+  }
+  .progress-bar {
+    width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
+    transition: width 0.3s ease;
+  }
+
+  .code-display {
+    margin-top: 15px; font-size: 1.8rem; font-weight: 900; color: var(--accent-green);
+    letter-spacing: 4px; text-align: center; display: none;
+  }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h2>🌸 لوحة إدارك بوت قصر زهرة الياسمين</h2>
-            <span class="status-badge" id="botStatus">جاري التحقق...</span>
-        </div>
 
-        <div class="grid">
-            <div class="card">
-                <h3>📊 إحصائيات النظام</h3>
-                <p>عدد الرسائل التي تم رد عليها: <b id="msgCount">0</b></p>
-            </div>
+<div class="container">
+  <!-- حالة الاتصال -->
+  <div class="status-badge">
+    <div id="statusDot" class="dot"></div>
+    <span id="statusText">متوقف</span>
+  </div>
 
-            <div class="card">
-                <h3>🔗 ربط حساب جديد</h3>
-                <input type="text" id="phone" placeholder="أدخل رقم الهاتف (مثال: 966551138192)">
-                <button onclick="requestPairing()">طلب رمز الاقتران</button>
-                <div class="pair-code" id="pairCode"></div>
-            </div>
-        </div>
+  <!-- الإحصائيات -->
+  <div class="card">
+    <h2>📊 إحصائيات النظام</h2>
+    <p>عدد الرسائل التي تم رد عليها: <b id="repliedCount" style="color: var(--accent-blue);">0</b></p>
+  </div>
 
-        <div class="card" style="margin-top: 20px;">
-            <h3>⚙️ إعدادات الرد التلقائي</h3>
-            <label>نص الترحيب:</label>
-            <textarea id="welcomeMsg" rows="3"></textarea>
-            
-            <label>رابط الصورة:</label>
-            <input type="text" id="logoUrl">
-            
-            <label>رقم هاتف جهة الاتصال:</label>
-            <input type="text" id="phoneContact">
-            
-            <button onclick="saveSettings()" style="background: #16a34a;">حفظ التغييرات</button>
-        </div>
+  <!-- ربط الحساب -->
+  <div class="card">
+    <h2>🔗 ربط حساب جديد</h2>
+    <input type="text" id="phoneInput" placeholder="أدخل رقم الهاتف (مثال: 967717521122)">
+    <button onclick="requestPairingCode()">طلب رمز الاقتران</button>
+    
+    <!-- خط التحميل عند الانتظار -->
+    <div id="progressContainer" class="progress-container">
+      <div id="progressBar" class="progress-bar"></div>
     </div>
 
-    <script>
-        async function fetchStatus() {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            document.getElementById('botStatus').innerText = data.status;
-            document.getElementById('msgCount').innerText = data.count;
-            if(data.code) document.getElementById('pairCode').innerText = "كود الربط: " + data.code;
-            
-            if(!document.getElementById('welcomeMsg').value) {
-                document.getElementById('welcomeMsg').value = data.settings.welcomeMsg;
-                document.getElementById('logoUrl').value = data.settings.logoUrl;
-                document.getElementById('phoneContact').value = data.settings.phoneContact;
-            }
-        }
+    <div id="codeDisplay" class="code-display"></div>
+  </div>
 
-        async function requestPairing() {
-            const phone = document.getElementById('phone').value;
-            const res = await fetch('/api/start-pair', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ phone })
-            });
-            const data = await res.json();
-            if(data.code) document.getElementById('pairCode').innerText = "كود الربط: " + data.code;
-        }
+  <!-- الإعدادات -->
+  <div class="card">
+    <h2>⚙️ إعدادات الرد التلقائي</h2>
+    <label style="font-size: 0.9rem; color: #ccc;">نص الترحيب:</label>
+    <textarea id="welcomeInput" rows="3"></textarea>
+    <button onclick="saveSettings()" style="background: #2b9348;">حفظ التغييرات</button>
+  </div>
+</div>
 
-        async function saveSettings() {
-            const welcomeMsg = document.getElementById('welcomeMsg').value;
-            const logoUrl = document.getElementById('logoUrl').value;
-            const phoneContact = document.getElementById('phoneContact').value;
+<script>
+  let statusInterval;
 
-            await fetch('/api/update-settings', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ welcomeMsg, logoUrl, phoneContact })
-            });
-            alert('تم حفظ الإعدادات!');
-        }
+  async function fetchStatus() {
+    try {
+      const res = await fetch('/api/status');
+      const data = await res.json();
+      
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      
+      if (data.status === 'متصل') {
+        dot.className = 'dot online';
+        text.textContent = 'متصل';
+      } else {
+        dot.className = 'dot';
+        text.textContent = 'متوقف';
+      }
 
-        setInterval(fetchStatus, 3000);
-        fetchStatus();
-    </script>
+      document.getElementById('repliedCount').textContent = data.repliedCount;
+      if (!document.getElementById('welcomeInput').value) {
+        document.getElementById('welcomeInput').value = data.welcomeText;
+      }
+    } catch (e) {}
+  }
+
+  async function requestPairingCode() {
+    const phone = document.getElementById('phoneInput').value;
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+    const codeDisplay = document.getElementById('codeDisplay');
+
+    if (!phone) return alert('يرجى كتابة رقم الهاتف أولاً');
+
+    codeDisplay.style.display = 'none';
+    progressContainer.style.display = 'block';
+    progressBar.style.width = '15%';
+
+    let p = 15;
+    const timer = setInterval(() => {
+      if (p < 85) {
+        p += 15;
+        progressBar.style.width = p + '%';
+      }
+    }, 400);
+
+    try {
+      const res = await fetch('/api/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber: phone })
+      });
+      const data = await res.json();
+
+      clearInterval(timer);
+      if (data.success) {
+        progressBar.style.width = '100%';
+        setTimeout(() => {
+          progressContainer.style.display = 'none';
+          codeDisplay.textContent = 'كود الربط: ' + data.code;
+          codeDisplay.style.display = 'block';
+        }, 400);
+      } else {
+        alert(data.error);
+        progressContainer.style.display = 'none';
+      }
+    } catch (err) {
+      clearInterval(timer);
+      alert('حدث خطأ في طلب الكود');
+      progressContainer.style.display = 'none';
+    }
+  }
+
+  async function saveSettings() {
+    const text = document.getElementById('welcomeInput').value;
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+    } catch(e) {
+      alert('تعذر حفظ التغييرات');
+    }
+  }
+
+  fetchStatus();
+  setInterval(fetchStatus, 3000);
+</script>
 </body>
 </html>
