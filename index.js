@@ -23,7 +23,6 @@ let repliedCount = 0;
 const cooldowns = new Map();
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-// القائمة الرئيسية المنسقة بالنظام الرقمي
 let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقاعة الكريستال* 💎✨
 
 يسعدنا خدمتكم وتلبية استفساراتكم لتنسيق حفلكم المميز.
@@ -35,6 +34,13 @@ let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقا
 3️⃣ - موقع القاعة ووصف الطريق`;
 
 async function initBaileys() {
+    botStatus = 'جاري الاتصال...';
+    
+    // التأكد من وجود مجلد session_auth
+    if (!fs.existsSync('session_auth')) {
+        fs.mkdirSync('session_auth');
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState('session_auth');
     const { version } = await fetchLatestBaileysVersion();
 
@@ -54,7 +60,10 @@ async function initBaileys() {
             botStatus = 'متوقف';
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
             if (statusCode !== DisconnectReason.loggedOut) {
+                console.log('🔄 إعادة الاتصال التلقائي...');
                 initBaileys();
+            } else {
+                console.log('❌ تم تسجيل الخروج النهائي.');
             }
         } else if (connection === 'open') {
             botStatus = 'متصل';
@@ -63,7 +72,6 @@ async function initBaileys() {
         }
     });
 
-    // معالجة الرسائل بنظام الأرقام التفاعلي (1, 2, 3)
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
         const m = messages[0];
@@ -74,126 +82,90 @@ async function initBaileys() {
         const now = Date.now();
 
         try {
-            // الخيار 1: معلومات الأسعار والاستفادة
-            if (text === '1' || text.includes('سعر') || text.includes('اسعار') || text.includes('استفاده')) {
+            if (text === '1' || text.includes('سعر') || text.includes('اسعار')) {
                 const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
-            } 
-            // الخيار 2: المواعيد المتاحة
-            else if (text === '2' || text.includes('مواعيد') || text.includes('حجز') || text.includes('موعد')) {
+            } else if (text === '2' || text.includes('مواعيد') || text.includes('حجز')) {
                 const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
                 await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
-            } 
-            // الخيار 3: موقع القاعة ووصف الطريق
-            else if (text === '3' || text.includes('موقع') || text.includes('عنوان') || text.includes('خريطة')) {
+            } else if (text === '3' || text.includes('موقع') || text.includes('عنوان')) {
                 const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
                     `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
                     `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
                 await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
-            } 
-            // القائمة الترحيبية لأي رسالة أخرى (مع مراعاة فترة التوقف 24 ساعة)
-            else {
+            } else {
                 if (cooldowns.has(from)) {
                     const lastSent = cooldowns.get(from);
-                    if (now - lastSent < TWENTY_FOUR_HOURS) {
-                        return;
-                    }
+                    if (now - lastSent < TWENTY_FOUR_HOURS) return;
                 }
 
                 if (fs.existsSync('logo.jpg')) {
                     const imgBuffer = fs.readFileSync('logo.jpg');
-                    await sock.sendMessage(from, { 
-                        image: imgBuffer,
-                        caption: welcomeText,
-                        mimetype: 'image/jpeg'
-                    }, { quoted: m });
+                    await sock.sendMessage(from, { image: imgBuffer, caption: welcomeText, mimetype: 'image/jpeg' }, { quoted: m });
                 } else {
                     await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
                 }
 
-                // إرسال بطاقة جهة الاتصال
-                const vcard = 'BEGIN:VCARD\n'
-                    + 'VERSION:3.0\n' 
-                    + 'FN:إدارة قصر زهرة الياسمين والقاعات\n'
-                    + 'TEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\n'
-                    + 'END:VCARD';
-
-                await sock.sendMessage(from, { 
-                    contacts: { 
-                        displayName: 'إدارة قصر زهرة الياسمين', 
-                        contacts: [{ vcard }] 
-                    } 
-                });
+                const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:إدارة قصر زهرة الياسمين والقاعات\nTEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\nEND:VCARD';
+                await sock.sendMessage(from, { contacts: { displayName: 'إدارة قصر زهرة الياسمين', contacts: [{ vcard }] } });
 
                 cooldowns.set(from, now);
             }
-
             repliedCount++;
         } catch (err) {
-            console.error('❌ خطأ أثناء معالجة الرسالة:', err.message);
+            console.error('❌ خطأ:', err.message);
         }
     });
 }
 
-// تشغيل النظام
 initBaileys();
 
-// APIs للواجهة والموقع
+// APIs للموقع
 app.get('/api/status', (req, res) => {
-    res.json({
-        status: botStatus,
-        repliedCount: repliedCount,
-        welcomeText: welcomeText
-    });
+    res.json({ status: botStatus, repliedCount, welcomeText });
+});
+
+// API إعادة تشغيل البوت دون الحاجة لكود جديد
+app.post('/api/restart', async (req, res) => {
+    try {
+        if (sock) {
+            sock.end(undefined);
+        }
+        await initBaileys();
+        res.json({ success: true, message: 'تمت إعادة تشغيل البوت بنجاح!' });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
 });
 
 app.post('/api/pair', async (req, res) => {
     let { phoneNumber } = req.body;
-    if (!phoneNumber) {
-        return res.status(400).json({ success: false, error: 'يرجى إدخال رقم الهاتف' });
-    }
+    if (!phoneNumber) return res.status(400).json({ success: false, error: 'يرجى إدخال الرقم' });
 
     try {
         const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
-
-        if (!sock) {
-            await initBaileys();
-        }
+        if (!sock) await initBaileys();
 
         if (!sock.authState.creds.registered) {
             setTimeout(async () => {
                 try {
                     const code = await sock.requestPairingCode(cleanedNumber);
-                    currentPairingCode = code;
-                    return res.json({ success: true, code: code });
+                    res.json({ success: true, code });
                 } catch (err) {
-                    return res.status(500).json({ success: false, error: 'تعذر الحصول على الكود، تأكد من الرقم ورمز الدولة' });
+                    res.status(500).json({ success: false, error: 'تعذر طلب الكود' });
                 }
             }, 2000);
         } else {
-            res.json({ success: false, error: 'الجهاز مقترن بالفعل!' });
+            res.json({ success: false, error: 'الجهاز مقترن بالفعل! استخدم زر تحديث/إعادة التشغيل.' });
         }
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
     }
 });
 
-app.post('/api/settings', (req, res) => {
-    const { text } = req.body;
-    if (text) {
-        welcomeText = text;
-        return res.json({ success: true, message: 'تم تحديث النص بنجاح' });
-    }
-    res.status(400).json({ success: false, error: 'النص فارغ' });
-});
-
-// Self-Ping لمنع الخمول
+// Self-Ping لمنع السيرفر من النوم
 setInterval(() => {
-    https.get('https://eb.onrender.com/api/status', (res) => {
-        console.log('🔄 إبقاء السيرفر نشطاً لمنع الخمول...');
-    }).on('error', (err) => {
-        console.error('⚠️ خطأ Self-Ping:', err.message);
-    });
-}, 8 * 60 * 1000);
+    https.get('https://eb.onrender.com/api/status', () => {}).on('error', () => {});
+}, 5 * 60 * 1000);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
