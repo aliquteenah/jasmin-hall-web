@@ -18,7 +18,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let sock = null;
 let currentPairingCode = '';
 let botStatus = 'متوقف';
-let isBotActive = true; // التحكم في حالة تفعيل الرد الآلي
+let isBotActive = true; 
 let repliedCount = 0;
 
 const cooldowns = new Map();
@@ -78,7 +78,7 @@ async function initBaileys() {
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
-        if (!isBotActive) return; // عند إيقاف البوت لا يتم الرد على أي رسالة
+        if (!isBotActive) return;
 
         const m = messages[0];
         if (!m || !m.message || m.key.fromMe) return;
@@ -96,7 +96,6 @@ async function initBaileys() {
         const now = Date.now();
 
         try {
-            // 1. الخيار الأول (الأسعار + بطاقة الاتصال)
             if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
                 const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
@@ -110,19 +109,16 @@ async function initBaileys() {
                     }
                 }, 500);
 
-            // 2. الخيار الثاني (المواعيد)
             } else if (cleanNumber === '2' || text.includes('مواعيد') || text.includes('حجز')) {
                 const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
                 await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
 
-            // 3. الخيار الثالث (الموقع)
             } else if (cleanNumber === '3' || text.includes('موقع') || text.includes('عنوان')) {
                 const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
                     `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
                     `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
                 await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
 
-            // 4. الترحيب بالرسالة الأولى لأي نص/لغة/إيموجي (مرة واحدة كل 24 ساعة)
             } else {
                 if (cooldowns.has(from)) {
                     const lastSent = cooldowns.get(from);
@@ -151,7 +147,6 @@ async function initBaileys() {
 
 initBaileys();
 
-// واجهات الاستعلام والتحكم
 app.get('/api/status', (req, res) => {
     res.json({ status: botStatus, isBotActive, repliedCount, welcomeText });
 });
