@@ -21,7 +21,7 @@ let botStatus = 'متوقف';
 let isBotActive = true; 
 let repliedCount = 0;
 
-let messageLogs = []; // مصفوفة تخزين السجلات
+let messageLogs = [];
 
 const cooldowns = new Map();
 const processedMessages = new Set();
@@ -37,22 +37,20 @@ let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقا
 2️⃣ - لمعرفة المواعيد المتاحة
 3️⃣ - موقع القاعة ووصف الطريق`;
 
-// إضافة سجل جديد
 function addLog(from, text, type) {
     const cleanFrom = from.replace(/@s\.whatsapp\.net|@g\.us/g, '');
     const logItem = {
         from: cleanFrom,
         text: text,
-        type: type, // 'incoming' أو 'outgoing'
+        type: type,
         time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
         timestamp: Date.now()
     };
     messageLogs.unshift(logItem);
 
-    if (messageLogs.length > 300) messageLogs.pop(); // الحفاظ على أداء السيرفر
+    if (messageLogs.length > 300) messageLogs.pop();
 }
 
-// تنظيف السجلات التي مضى عليها 24 ساعة تلقائياً
 setInterval(() => {
     const now = Date.now();
     messageLogs = messageLogs.filter(log => (now - log.timestamp) < TWENTY_FOUR_HOURS);
@@ -86,9 +84,11 @@ async function initBaileys() {
         
         if (connection === 'close') {
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
-            console.log(`⚠️ تم إغلاق الاتصال، رمز الحالة: ${statusCode}`);
+            const errorMsg = (lastDisconnect?.error)?.message || '';
+            console.log(`⚠️ تم إغلاق الاتصال، رمز الحالة: ${statusCode} | السبب: ${errorMsg}`);
 
-            if (statusCode === 428 || statusCode === DisconnectReason.loggedOut) {
+            // تنظيف الجلسة تلقائياً إذا كان الخطأ بسبب تلف التشفير (Bad MAC / Bad Session / 428)
+            if (statusCode === 428 || statusCode === DisconnectReason.loggedOut || errorMsg.includes('Bad MAC')) {
                 console.log('🧹 مسح ملفات الجلسة المعطوبة لإعادة الإقران بنظافة...');
                 botStatus = 'يحتاج إعادة إقران';
                 try {
@@ -125,8 +125,7 @@ async function initBaileys() {
         const cleanNumber = rawText.replace(/[^0-9]/g, '');
         const now = Date.now();
 
-        // تسجيل الرسالة الواردة
-        addLog(from, rawText || '[وسائط/محتوى غامض]', 'incoming');
+        addLog(from, rawText || '[محتوى وسائط]', 'incoming');
 
         try {
             if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
