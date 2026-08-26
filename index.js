@@ -87,7 +87,6 @@ async function initBaileys() {
             const errorMsg = (lastDisconnect?.error)?.message || '';
             console.log(`⚠️ تم إغلاق الاتصال، رمز الحالة: ${statusCode} | السبب: ${errorMsg}`);
 
-            // تنظيف الجلسة تلقائياً إذا كان الخطأ بسبب تلف التشفير (Bad MAC / Bad Session / 428)
             if (statusCode === 428 || statusCode === DisconnectReason.loggedOut || errorMsg.includes('Bad MAC')) {
                 console.log('🧹 مسح ملفات الجلسة المعطوبة لإعادة الإقران بنظافة...');
                 botStatus = 'يحتاج إعادة إقران';
@@ -220,6 +219,22 @@ app.post('/api/restart', async (req, res) => {
     }
 });
 
+app.post('/api/reset-session', async (req, res) => {
+    try {
+        if (sock) {
+            sock.end(undefined);
+        }
+        if (fs.existsSync('session_auth')) {
+            fs.rmSync('session_auth', { recursive: true, force: true });
+        }
+        botStatus = 'يحتاج إعادة إقران';
+        await initBaileys();
+        res.json({ success: true, message: 'تم مسح الجلسة بنجاح! يمكنك الآن طلب كود إقران للرقم الجديد.' });
+    } catch (e) {
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/api/pair', async (req, res) => {
     let { phoneNumber } = req.body;
     if (!phoneNumber) return res.status(400).json({ success: false, error: 'يرجى إدخال الرقم' });
@@ -238,7 +253,7 @@ app.post('/api/pair', async (req, res) => {
                 }
             }, 2000);
         } else {
-            res.json({ success: false, error: 'الجهاز مقترن بالفعل! استخدم زر تحديث/إعادة التشغيل.' });
+            res.json({ success: false, error: 'الجهاز مقترن بالفعل! استخدم زر تسجيل الخروج وربط رقم جديد.' });
         }
     } catch (e) {
         res.status(500).json({ success: false, error: e.message });
