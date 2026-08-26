@@ -18,9 +18,9 @@ app.use(express.static(path.join(__dirname, 'public')));
 let sock = null;
 let currentPairingCode = '';
 let botStatus = 'متوقف';
+let isBotActive = true; // التحكم في حالة تفعيل الرد الآلي
 let repliedCount = 0;
 
-// استراتيجيات تتبع وتجنب التكرار
 const cooldowns = new Map();
 const processedMessages = new Set();
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
@@ -36,7 +36,7 @@ let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقا
 3️⃣ - موقع القاعة ووصف الطريق`;
 
 async function initBaileys() {
-    botStatus = 'جاري الاتصال...';
+    botStatus = isBotActive ? 'جاري الاتصال...' : 'متوقف مؤقتاً';
     
     if (!fs.existsSync('session_auth')) {
         fs.mkdirSync('session_auth');
@@ -70,7 +70,7 @@ async function initBaileys() {
                 console.log('❌ تم تسجيل الخروج النهائي.');
             }
         } else if (connection === 'open') {
-            botStatus = 'متصل';
+            botStatus = isBotActive ? 'متصل' : 'متوقف مؤقتاً';
             currentPairingCode = '';
             console.log('✅ تم الاتصال بنجاح بواتساب!');
         }
@@ -78,6 +78,8 @@ async function initBaileys() {
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
+        if (!isBotActive) return; // عند إيقاف البوت لا يتم الرد على أي رسالة
+
         const m = messages[0];
         if (!m || !m.message || m.key.fromMe) return;
 
@@ -94,12 +96,11 @@ async function initBaileys() {
         const now = Date.now();
 
         try {
-            // الخيار رقم 1: إرسال تفاصيل الأسعار + بطاقة الاتصال تلقائياً
+            // 1. الخيار الأول (الأسعار + بطاقة الاتصال)
             if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
                 const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
 
-                // إرسال بطاقة جهة الاتصال (VCard) مع الخيار رقم 1
                 setTimeout(async () => {
                     try {
                         const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:إدارة قصر زهرة الياسمين والقاعات\nTEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\nEND:VCARD';
@@ -109,16 +110,19 @@ async function initBaileys() {
                     }
                 }, 500);
 
+            // 2. الخيار الثاني (المواعيد)
             } else if (cleanNumber === '2' || text.includes('مواعيد') || text.includes('حجز')) {
                 const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
                 await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
 
+            // 3. الخيار الثالث (الموقع)
             } else if (cleanNumber === '3' || text.includes('موقع') || text.includes('عنوان')) {
                 const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
                     `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
                     `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
                 await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
 
+            // 4. الترحيب بالرسالة الأولى لأي نص/لغة/إيموجي (مرة واحدة كل 24 ساعة)
             } else {
                 if (cooldowns.has(from)) {
                     const lastSent = cooldowns.get(from);
@@ -129,7 +133,6 @@ async function initBaileys() {
                     ? path.join(__dirname, 'public', 'logo.jpg')
                     : (fs.existsSync('logo.jpg') ? 'logo.jpg' : null);
 
-                // إرسال رسالة الترحيب فقط (بدون بطاقة الاتصال)
                 if (imagePath) {
                     const imgBuffer = fs.readFileSync(imagePath);
                     await sock.sendMessage(from, { image: imgBuffer, caption: welcomeText, mimetype: 'image/jpeg' }, { quoted: m });
@@ -148,8 +151,21 @@ async function initBaileys() {
 
 initBaileys();
 
+// واجهات الاستعلام والتحكم
 app.get('/api/status', (req, res) => {
-    res.json({ status: botStatus, repliedCount, welcomeText });
+    res.json({ status: botStatus, isBotActive, repliedCount, welcomeText });
+});
+
+app.post('/api/stop', (req, res) => {
+    isBotActive = false;
+    botStatus = 'متوقف مؤقتاً';
+    res.json({ success: true, message: 'تم إيقاف الرد الآلي للبوت.' });
+});
+
+app.post('/api/start', (req, res) => {
+    isBotActive = true;
+    botStatus = 'متصل';
+    res.json({ success: true, message: 'تم تفعيل الرد الآلي للبوت.' });
 });
 
 app.post('/api/restart', async (req, res) => {
