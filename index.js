@@ -99,8 +99,13 @@ async function initBaileys() {
                     if (now - lastSent < TWENTY_FOUR_HOURS) return;
                 }
 
-                if (fs.existsSync('logo.jpg')) {
-                    const imgBuffer = fs.readFileSync('logo.jpg');
+                // التحقق من وجود الصورة داخل مجلد public أو المجلد الرئيسي
+                const imagePath = fs.existsSync(path.join(__dirname, 'public', 'logo.jpg'))
+                    ? path.join(__dirname, 'public', 'logo.jpg')
+                    : (fs.existsSync('logo.jpg') ? 'logo.jpg' : null);
+
+                if (imagePath) {
+                    const imgBuffer = fs.readFileSync(imagePath);
                     await sock.sendMessage(from, { image: imgBuffer, caption: welcomeText, mimetype: 'image/jpeg' }, { quoted: m });
                 } else {
                     await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
