@@ -38,7 +38,6 @@ let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقا
 async function initBaileys() {
     botStatus = 'جاري الاتصال...';
     
-    // التأكد من وجود مجلد session_auth
     if (!fs.existsSync('session_auth')) {
         fs.mkdirSync('session_auth');
     }
@@ -46,15 +45,14 @@ async function initBaileys() {
     const { state, saveCreds } = await useMultiFileAuthState('session_auth');
     const { version } = await fetchLatestBaileysVersion();
 
-    // إعداد الاتصال المتوافق لتفادي خطأ 428
     sock = makeWASocket({
         version,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
         browser: ["Ubuntu", "Chrome", "20.0.04"],
-        syncFullHistory: false,      // إيقاف مزامنة الأرشيف الثقيل لمنع استهلاك الموارد
-        connectTimeoutMs: 60000,     // مهلة كافية للربط المستقر مع واتساب
+        syncFullHistory: false,
+        connectTimeoutMs: 60000,
         defaultQueryTimeoutMs: undefined
     });
 
@@ -83,55 +81,25 @@ async function initBaileys() {
         const m = messages[0];
         if (!m || !m.message || m.key.fromMe) return;
 
-        // 1. منع معالجة نفس الرسالة مرتين (تفادي التكرار)
         const msgId = m.key.id;
         if (processedMessages.has(msgId)) return;
         processedMessages.add(msgId);
         
-        // تنظيف ذاكرة المعرفات دورياً
         if (processedMessages.size > 1000) processedMessages.clear();
 
         const from = m.key.remoteJid;
         const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
         const text = rawText.toLowerCase();
-        
-        // تنظيف المدخلات لاستخراج الرقم فقط (لتجنب مشاكل الإيموجي والمسافات)
         const cleanNumber = rawText.replace(/[^0-9]/g, '');
         const now = Date.now();
 
         try {
-            // 2. منطق الرد على الخيارات
+            // الخيار رقم 1: إرسال تفاصيل الأسعار + بطاقة الاتصال تلقائياً
             if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
                 const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
-            } else if (cleanNumber === '2' || text.includes('مواعيد') || text.includes('حجز')) {
-                const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
-                await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
-            } else if (cleanNumber === '3' || text.includes('موقع') || text.includes('عنوان')) {
-                const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
-                    `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
-                    `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
-                await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
-            } else {
-                // 3. فحص مهلة الـ 24 ساعة للترحيب
-                if (cooldowns.has(from)) {
-                    const lastSent = cooldowns.get(from);
-                    if (now - lastSent < TWENTY_FOUR_HOURS) return;
-                }
 
-                // 4. قراءة الشعار وإرسال الترحيب
-                const imagePath = fs.existsSync(path.join(__dirname, 'public', 'logo.jpg'))
-                    ? path.join(__dirname, 'public', 'logo.jpg')
-                    : (fs.existsSync('logo.jpg') ? 'logo.jpg' : null);
-
-                if (imagePath) {
-                    const imgBuffer = fs.readFileSync(imagePath);
-                    await sock.sendMessage(from, { image: imgBuffer, caption: welcomeText, mimetype: 'image/jpeg' }, { quoted: m });
-                } else {
-                    await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
-                }
-
-                // 5. إرسال جهة الاتصال بشكل منفصل بعد ثانية تفادياً للـ Crash
+                // إرسال بطاقة جهة الاتصال (VCard) مع الخيار رقم 1
                 setTimeout(async () => {
                     try {
                         const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:إدارة قصر زهرة الياسمين والقاعات\nTEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\nEND:VCARD';
@@ -139,7 +107,35 @@ async function initBaileys() {
                     } catch (e) {
                         console.error('خطأ إرسال جهة الاتصال:', e.message);
                     }
-                }, 1000);
+                }, 500);
+
+            } else if (cleanNumber === '2' || text.includes('مواعيد') || text.includes('حجز')) {
+                const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
+                await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
+
+            } else if (cleanNumber === '3' || text.includes('موقع') || text.includes('عنوان')) {
+                const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
+                    `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
+                    `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
+                await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
+
+            } else {
+                if (cooldowns.has(from)) {
+                    const lastSent = cooldowns.get(from);
+                    if (now - lastSent < TWENTY_FOUR_HOURS) return;
+                }
+
+                const imagePath = fs.existsSync(path.join(__dirname, 'public', 'logo.jpg'))
+                    ? path.join(__dirname, 'public', 'logo.jpg')
+                    : (fs.existsSync('logo.jpg') ? 'logo.jpg' : null);
+
+                // إرسال رسالة الترحيب فقط (بدون بطاقة الاتصال)
+                if (imagePath) {
+                    const imgBuffer = fs.readFileSync(imagePath);
+                    await sock.sendMessage(from, { image: imgBuffer, caption: welcomeText, mimetype: 'image/jpeg' }, { quoted: m });
+                } else {
+                    await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
+                }
 
                 cooldowns.set(from, now);
             }
@@ -152,7 +148,6 @@ async function initBaileys() {
 
 initBaileys();
 
-// واجهات الاستعلام والتحكم للموقع (APIs)
 app.get('/api/status', (req, res) => {
     res.json({ status: botStatus, repliedCount, welcomeText });
 });
@@ -194,7 +189,6 @@ app.post('/api/pair', async (req, res) => {
     }
 });
 
-// Self-Ping لمنع خادم Render من الدخول في وضع الخمول (Sleep)
 setInterval(() => {
     https.get('https://jasmin-hall-web.onrender.com/api/status', () => {}).on('error', () => {});
 }, 5 * 60 * 1000);
