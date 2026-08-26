@@ -23,20 +23,16 @@ let repliedCount = 0;
 const cooldowns = new Map();
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-// النص الترحيبي الافتراضي
-let welcomeText = `أهلاً بك في *قاعات الكريستــال للأفراح والمناسبات* 💎✨
+// القائمة الرئيسية المنسقة بالنظام الرقمي
+let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقاعة الكريستال* 💎✨
 
-يسعدنا خدمتك وتلبية استفساراتك لتنسيق حفلكم المميز.
+يسعدنا خدمتكم وتلبية استفساراتكم لتنسيق حفلكم المميز.
 
-📌 *الخدمات والتعليمات الخاصة بالمستأجرين:*
-• **مواعيد الحجز والمقابلة:** يرجى التنسيق المسبق مع الإدارة قبل موعد المناسبة.
-• **التجهيزات والخدمات:** تشمل القاعة كافة تجهيزات الإضاءة، الصوت، والديكورات الأساسية.
-• **الدخول والتجهيز:** يُسمح لفريق التنسيق والديكور بالدخول في الوقت المتفق عليه في العقد.
+يرجى إرسال رقم الخيار المطلوب:
 
-📞 **للتواصل المباشر والاستفسارات الطارئة:**
-يرجى الاتصال بنا أو التواصل عبر البطاقة المرفقة أدناه.
-
-أهلاً وسهلاً بكم، ونتمنى لكم مناسبة سعيدة! 🎉`;
+1️⃣ - للاستفسار عن الأسعار والمعلومات
+2️⃣ - لمعرفة المواعيد المتاحة
+3️⃣ - موقع القاعة ووصف الطريق`;
 
 async function initBaileys() {
     const { state, saveCreds } = await useMultiFileAuthState('session_auth');
@@ -67,46 +63,43 @@ async function initBaileys() {
         }
     });
 
-    // معالجة الرسائل والرد التلقائي
+    // معالجة الرسائل بنظام الأرقام التفاعلي (1, 2, 3)
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
 
         const from = m.key.remoteJid;
-        const text = (m.message.conversation || m.message.extendedTextMessage?.text || '').toLowerCase();
+        const text = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim().toLowerCase();
         const now = Date.now();
 
-        // فحص المهلة الزمنيّة (24 ساعة) للتجاوب الافتراضي
-        if (cooldowns.has(from)) {
-            const lastSent = cooldowns.get(from);
-            if (now - lastSent < TWENTY_FOUR_HOURS) {
-                console.log(`⏳ تم تخطي المحادثة [${from}] لعدم انقضاء 24 ساعة.`);
-                return;
-            }
-        }
-
         try {
-            // 1. الاستفسار عن الموقع
-            if (text.includes('موقع') || text.includes('عنوان') || text.includes('الموقع') || text.includes('خريطة')) {
-                await sock.sendMessage(from, {
-                    location: {
-                        degreesLatitude: 15.3533,
-                        degreesLongitude: 44.2081,
-                        name: "قاعات الكريستال للأفراح والمناسبات"
-                    }
-                }, { quoted: m });
-                await sock.sendMessage(from, { text: "📍 موقع القاعة موضح على الخريطة أعلاه، يسعدنا زيارتكم!" });
-            } 
-            // 2. الاستفسار عن الأسعار والحجز
-            else if (text.includes('سعر') || text.includes('اسعار') || text.includes('وقت') || text.includes('حجز')) {
-                const priceInfo = `💎 *قاعات الكريستال للأفراح والمناسبات* 💎\n\n` +
-                                  `⏰ *أوقات الحجز:* \n- الفترة الصباحية: من 9 صباحاً حتى 2 ظهراً\n- الفترة المسائية: من 4 عصراً حتى 11 مساءً\n\n` +
-                                  `💰 *الأسعار والاستفسارات:* \nللحصول على العروض والتفاصيل الدقيقة، يرجى التواصل مباشرة مع الإدارة.`;
+            // الخيار 1: معلومات الأسعار والاستفادة
+            if (text === '1' || text.includes('سعر') || text.includes('اسعار') || text.includes('استفاده')) {
+                const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
-            }
-            // 3. الرد الترحيبي العام (صورة + نص + بطاقة)
+            } 
+            // الخيار 2: المواعيد المتاحة
+            else if (text === '2' || text.includes('مواعيد') || text.includes('حجز') || text.includes('موعد')) {
+                const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
+                await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
+            } 
+            // الخيار 3: موقع القاعة ووصف الطريق
+            else if (text === '3' || text.includes('موقع') || text.includes('عنوان') || text.includes('خريطة')) {
+                const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
+                    `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
+                    `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
+                await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
+            } 
+            // القائمة الترحيبية لأي رسالة أخرى (مع مراعاة فترة التوقف 24 ساعة)
             else {
+                if (cooldowns.has(from)) {
+                    const lastSent = cooldowns.get(from);
+                    if (now - lastSent < TWENTY_FOUR_HOURS) {
+                        return;
+                    }
+                }
+
                 if (fs.existsSync('logo.jpg')) {
                     const imgBuffer = fs.readFileSync('logo.jpg');
                     await sock.sendMessage(from, { 
@@ -121,13 +114,13 @@ async function initBaileys() {
                 // إرسال بطاقة جهة الاتصال
                 const vcard = 'BEGIN:VCARD\n'
                     + 'VERSION:3.0\n' 
-                    + 'FN:إدارة قاعات الكريستال\n'
+                    + 'FN:إدارة قصر زهرة الياسمين والقاعات\n'
                     + 'TEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\n'
                     + 'END:VCARD';
 
                 await sock.sendMessage(from, { 
                     contacts: { 
-                        displayName: 'إدارة قاعات الكريستال', 
+                        displayName: 'إدارة قصر زهرة الياسمين', 
                         contacts: [{ vcard }] 
                     } 
                 });
@@ -145,7 +138,7 @@ async function initBaileys() {
 // تشغيل النظام
 initBaileys();
 
-// APIs للواجهة
+// APIs للواجهة والموقع
 app.get('/api/status', (req, res) => {
     res.json({
         status: botStatus,
@@ -194,13 +187,13 @@ app.post('/api/settings', (req, res) => {
     res.status(400).json({ success: false, error: 'النص فارغ' });
 });
 
-// نظام Self-Ping لإبقاء سيرفر Render نشطاً ومنعه من الخمول والتوقف
+// Self-Ping لمنع الخمول
 setInterval(() => {
     https.get('https://eb.onrender.com/api/status', (res) => {
         console.log('🔄 إبقاء السيرفر نشطاً لمنع الخمول...');
     }).on('error', (err) => {
         console.error('⚠️ خطأ Self-Ping:', err.message);
     });
-}, 8 * 60 * 1000); // إرسال طلب كل 8 دقائق
+}, 8 * 60 * 1000);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
