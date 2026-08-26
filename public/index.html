@@ -1,206 +1,358 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>قصر زهرة الياسمين - لوحة التحكم</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg-color: #0b132b;
-    --card-bg: #1c2541;
-    --accent-blue: #00f3ff;
-    --accent-green: #00ff88;
-    --accent-red: #ff3b5c;
-    --accent-yellow: #f39c12;
-    --text-color: #ffffff;
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم البوت - قصر زهرة الياسمين</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Tajawal', system-ui, -apple-system, sans-serif;
+        }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Tajawal', sans-serif; }
-  body { background: var(--bg-color); color: var(--text-color); padding: 20px; display: flex; justify-content: center; }
-  .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 20px; }
-  
-  .status-badge {
-    align-self: center; padding: 8px 25px; border-radius: 50px; font-weight: bold; font-size: 1.1rem;
-    display: flex; align-items: center; gap: 10px; background: rgba(255, 255, 255, 0.05);
-  }
-  .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--accent-red); }
-  .dot.online { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+        body {
+            background-color: #05070a;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            overflow-x: hidden;
+            position: relative;
+        }
 
-  .card { background: var(--card-bg); border-radius: 20px; padding: 20px; border: 1px solid rgba(255, 255, 255, 0.08); }
-  .card h2 { font-size: 1.2rem; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        /* خلفية النجوم والتأثيرات البلورية */
+        #particles-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
 
-  input, textarea, button {
-    width: 100%; padding: 14px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.2);
-    background: #0b132b; color: #fff; font-size: 1rem; margin-top: 10px; outline: none; text-align: center;
-  }
+        .glow-bg {
+            position: fixed;
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, rgba(0,0,0,0) 70%);
+            top: 20%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1;
+            pointer-events: none;
+        }
 
-  button { background: #0077b6; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
-  button:hover { background: #0284c7; }
+        /* الكارت البلوري الرئيسي */
+        .glass-card {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 440px;
+            background: rgba(15, 20, 28, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            border-radius: 28px;
+            padding: 30px 24px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8),
+                        inset 0 0 15px rgba(212, 175, 55, 0.1);
+            text-align: center;
+        }
 
-  .btn-restart {
-    background: var(--accent-yellow);
-    color: #000;
-  }
-  .btn-restart:hover {
-    background: #d68910;
-  }
+        /* التاج والعنوان */
+        .crown-icon {
+            font-size: 45px;
+            margin-bottom: 5px;
+            display: inline-block;
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+        }
 
-  /* Progress Bar */
-  .progress-container {
-    width: 100%; background: rgba(255, 255, 255, 0.1); border-radius: 10px;
-    height: 8px; margin-top: 15px; overflow: hidden; display: none;
-  }
-  .progress-bar {
-    width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-blue), var(--accent-green));
-    transition: width 0.3s ease;
-  }
+        .title {
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #fff 30%, #ffd700 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
 
-  .code-display {
-    margin-top: 15px; font-size: 1.8rem; font-weight: 900; color: var(--accent-green);
-    letter-spacing: 4px; text-align: center; display: none; background: rgba(0,255,136,0.1);
-    padding: 10px; border-radius: 12px; border: 1px dashed var(--accent-green);
-  }
-</style>
+        .badge-vip {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            border: 1px solid rgba(212, 175, 55, 0.5);
+            background: rgba(212, 175, 55, 0.08);
+            color: #ffd700;
+            font-size: 13px;
+            font-weight: 700;
+            margin-bottom: 25px;
+            box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
+        }
+
+        /* صندوق الاستعلام البلوري الداخلي */
+        .glass-box {
+            background: rgba(8, 12, 18, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .status-text {
+            font-size: 15px;
+            color: #a0aec0;
+        }
+
+        .status-val {
+            font-weight: bold;
+            color: #00f2fe;
+            margin-right: 5px;
+        }
+
+        /* الإدخال والأزرار البلورية */
+        input {
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            background: rgba(5, 8, 13, 0.8);
+            color: #00f2fe;
+            font-size: 16px;
+            text-align: center;
+            outline: none;
+            margin-bottom: 12px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            border-color: #ffd700;
+            box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
+        }
+
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border-radius: 14px;
+            border: none;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
+            color: #000;
+            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+            grid-column: span 2;
+        }
+
+        .btn-green {
+            background: rgba(37, 211, 102, 0.15);
+            border: 1px solid rgba(37, 211, 102, 0.4);
+            color: #25D366;
+        }
+
+        .btn-red {
+            background: rgba(231, 76, 60, 0.15);
+            border: 1px solid rgba(231, 76, 60, 0.4);
+            color: #e74c3c;
+        }
+
+        .btn-blue {
+            background: rgba(0, 242, 254, 0.12);
+            border: 1px solid rgba(0, 242, 254, 0.3);
+            color: #00f2fe;
+            grid-column: span 2;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.2);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        #pairCode {
+            margin-top: 12px;
+            font-size: 20px;
+            letter-spacing: 2px;
+            color: #00f2fe;
+            text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
+        }
+
+        .footer-status {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #718096;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #25D366;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #25D366;
+        }
+    </style>
 </head>
 <body>
 
-<div class="container">
-  <div class="status-badge">
-    <div id="statusDot" class="dot"></div>
-    <span id="statusText">متوقف</span>
-  </div>
+<canvas id="particles-canvas"></canvas>
+<div class="glow-bg"></div>
 
-  <div class="card">
-    <h2>📊 إحصائيات النظام</h2>
-    <p>عدد الرسائل التي تم رد عليها: <b id="repliedCount" style="color: var(--accent-blue);">0</b></p>
-    <button onclick="restartBot()" class="btn-restart">🔄 إعادة تشغيل البوت / تحديث الاتصال</button>
-  </div>
+<div class="glass-card">
+    <div class="crown-icon">👑</div>
+    <h1 class="title">قصر زهرة الياسمين</h1>
+    <div class="badge-vip">✦ SYSTEM VIP BOT ✦</div>
 
-  <div class="card">
-    <h2>🔗 ربط حساب جديد</h2>
-    <input type="text" id="phoneInput" placeholder="أدخل الرقم مع مفتاح الدولة (مثل: 967717521122)">
-    <button onclick="requestPairingCode()">طلب رمز الاقتران</button>
-    
-    <div id="progressContainer" class="progress-container">
-      <div id="progressBar" class="progress-bar"></div>
+    <div class="glass-box">
+        <div class="status-text">حالة الخدمة: <span id="status" class="status-val">جاري التحميل...</span></div>
+        <div class="status-text" style="margin-top: 6px;">إجمالي الردود: <span id="repliedCount" class="status-val" style="color: #ffd700;">0</span></div>
     </div>
 
-    <div id="codeDisplay" class="code-display"></div>
-  </div>
+    <input type="text" id="phone" placeholder="أدخل الرقم: 966504790504">
+    <button class="btn btn-gold" onclick="requestPairing()">⚡ طلب كود الإقران</button>
+    <div id="pairCode"></div>
 
-  <div class="card">
-    <h2>⚙️ إعدادات الرد التلقائي</h2>
-    <label style="font-size: 0.9rem; color: #ccc;">نص الترحيب:</label>
-    <textarea id="welcomeInput" rows="3"></textarea>
-    <button onclick="saveSettings()" style="background: #2b9348;">حفظ التغييرات</button>
-  </div>
+    <div class="btn-grid">
+        <button class="btn btn-green" onclick="startBot()">▶️ تشغيل</button>
+        <button class="btn btn-red" onclick="stopBot()">⏸️ إيقاف</button>
+        <button class="btn btn-blue" onclick="restartBot()">🔄 إعادة تنشيط السيرفر</button>
+    </div>
+
+    <div class="footer-status">
+        <div class="dot"></div>
+        <span>الخادم متصل ومحمي</span>
+    </div>
 </div>
 
 <script>
-  async function fetchStatus() {
-    try {
-      const res = await fetch('/api/status');
-      const data = await res.json();
-      
-      const dot = document.getElementById('statusDot');
-      const text = document.getElementById('statusText');
-      
-      if (data.status === 'متصل') {
-        dot.className = 'dot online';
-        text.textContent = 'متصل';
-      } else {
-        dot.className = 'dot';
-        text.textContent = data.status || 'متوقف';
-      }
+// إنشاء تأثير النجوم المتلألئة بالخلفية Canvas
+const canvas = document.getElementById('particles-canvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
 
-      document.getElementById('repliedCount').textContent = data.repliedCount;
-      if (!document.getElementById('welcomeInput').value) {
-        document.getElementById('welcomeInput').value = data.welcomeText;
-      }
-    } catch (e) {}
-  }
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
-  async function restartBot() {
-    if (!confirm('هل تريد إعادة تشغيل البوت وتحديث الاتصال؟')) return;
-    try {
-      const res = await fetch('/api/restart', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        alert('✅ تم إرسال أمر إعادة التشغيل بنجاح!');
-        fetchStatus();
-      } else {
-        alert('❌ خطأ: ' + data.error);
-      }
-    } catch (e) {
-      alert('حدث خطأ أثناء التواصل مع السيرفر');
+class Particle {
+    constructor() {
+        this.reset();
     }
-  }
+    reset() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.size = Math.random() * 2 + 0.5;
+        this.speedY = Math.random() * 0.3 + 0.1;
+        this.opacity = Math.random();
+        this.color = Math.random() > 0.4 ? '#ffd700' : '#00f2fe';
+    }
+    update() {
+        this.y -= this.speedY;
+        if (this.y < 0) this.reset();
+    }
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.opacity;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
 
-  async function requestPairingCode() {
-    const phone = document.getElementById('phoneInput').value;
-    const progressContainer = document.getElementById('progressContainer');
-    const progressBar = document.getElementById('progressBar');
-    const codeDisplay = document.getElementById('codeDisplay');
+for (let i = 0; i < 60; i++) particles.push(new Particle());
 
-    if (!phone) return alert('يرجى كتابة رقم الهاتف أولاً');
+function animateParticles() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+        p.update();
+        p.draw();
+    });
+    requestAnimationFrame(animateParticles);
+}
+animateParticles();
 
-    codeDisplay.style.display = 'none';
-    progressContainer.style.display = 'block';
-    progressBar.style.width = '20%';
-
-    let p = 20;
-    const timer = setInterval(() => {
-      if (p < 85) {
-        p += 10;
-        progressBar.style.width = p + '%';
-      }
-    }, 300);
-
+// ربط الأزرار بالـ APIs
+async function updateStatus() {
     try {
-      const res = await fetch('/api/pair', {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+        document.getElementById('status').innerText = data.status;
+        document.getElementById('repliedCount').innerText = data.repliedCount;
+    } catch(e) {}
+}
+
+async function startBot() {
+    const res = await fetch('/api/start', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    updateStatus();
+}
+
+async function stopBot() {
+    const res = await fetch('/api/stop', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    updateStatus();
+}
+
+async function restartBot() {
+    const res = await fetch('/api/restart', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    updateStatus();
+}
+
+async function requestPairing() {
+    const phoneNumber = document.getElementById('phone').value;
+    if (!phoneNumber) return alert("يرجى إدخال رقم الهاتف أولاً");
+    
+    const res = await fetch('/api/pair', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber: phone })
-      });
-      const data = await res.json();
-
-      clearInterval(timer);
-      if (data.success) {
-        progressBar.style.width = '100%';
-        setTimeout(() => {
-          progressContainer.style.display = 'none';
-          codeDisplay.textContent = data.code;
-          codeDisplay.style.display = 'block';
-        }, 300);
-      } else {
+        body: JSON.stringify({ phoneNumber })
+    });
+    const data = await res.json();
+    if(data.success) {
+        document.getElementById('pairCode').innerText = "كود الإقران: " + data.code;
+    } else {
         alert(data.error);
-        progressContainer.style.display = 'none';
-      }
-    } catch (err) {
-      clearInterval(timer);
-      alert('حدث خطأ أثناء التواصل مع السيرفر');
-      progressContainer.style.display = 'none';
     }
-  }
+}
 
-  async function saveSettings() {
-    const text = document.getElementById('welcomeInput').value;
-    try {
-      const res = await fetch('/api/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text })
-      });
-      const data = await res.json();
-      alert(data.message || data.error);
-    } catch(e) {
-      alert('تعذر حفظ التغييرات');
-    }
-  }
-
-  fetchStatus();
-  setInterval(fetchStatus, 3000);
+setInterval(updateStatus, 3000);
+updateStatus();
 </script>
+
 </body>
 </html>
