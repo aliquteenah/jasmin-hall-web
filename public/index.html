@@ -193,7 +193,6 @@
             text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
         }
 
-        /* تنسيقات قسم السجلات */
         .logs-section {
             margin-top: 20px;
             text-align: right;
@@ -294,9 +293,9 @@
         <button class="btn btn-green" onclick="startBot()">▶️ تشغيل</button>
         <button class="btn btn-red" onclick="stopBot()">⏸️ إيقاف</button>
         <button class="btn btn-blue" onclick="restartBot()">🔄 إعادة تنشيط السيرفر</button>
+        <button class="btn btn-red" style="grid-column: span 2;" onclick="resetSession()">🗑️ تسجيل الخروج وربط رقم جديد</button>
     </div>
 
-    <!-- قسم السجلات المضاف -->
     <div class="logs-section">
         <div class="logs-header">
             <span class="logs-title">📋 سجل الرسائل (24 ساعة)</span>
@@ -416,9 +415,18 @@ async function restartBot() {
     updateStatus();
 }
 
+async function resetSession() {
+    if (!confirm("هل أنت تأكد من رغبتك في مسح الجلسة وتغيير رقم البوت؟")) return;
+    const res = await fetch('/api/reset-session', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
+    document.getElementById('pairCode').innerText = '';
+    updateStatus();
+}
+
 async function requestPairing() {
     const phoneNumber = document.getElementById('phone').value;
-    if (!phoneNumber) return alert("يرجى إدخال رقم الهاتف أولاً");
+    if (!phoneNumber) return alert("يرجى إدخال الرقم أولاً");
     
     const res = await fetch('/api/pair', {
         method: 'POST',
