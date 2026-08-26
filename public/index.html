@@ -12,6 +12,7 @@
     --accent-blue: #00f3ff;
     --accent-green: #00ff88;
     --accent-red: #ff3b5c;
+    --accent-yellow: #f39c12;
     --text-color: #ffffff;
   }
 
@@ -36,6 +37,14 @@
 
   button { background: #0077b6; border: none; font-weight: bold; cursor: pointer; transition: 0.3s; }
   button:hover { background: #0284c7; }
+
+  .btn-restart {
+    background: var(--accent-yellow);
+    color: #000;
+  }
+  .btn-restart:hover {
+    background: #d68910;
+  }
 
   /* Progress Bar */
   .progress-container {
@@ -65,6 +74,7 @@
   <div class="card">
     <h2>📊 إحصائيات النظام</h2>
     <p>عدد الرسائل التي تم رد عليها: <b id="repliedCount" style="color: var(--accent-blue);">0</b></p>
+    <button onclick="restartBot()" class="btn-restart">🔄 إعادة تشغيل البوت / تحديث الاتصال</button>
   </div>
 
   <div class="card">
@@ -101,7 +111,7 @@
         text.textContent = 'متصل';
       } else {
         dot.className = 'dot';
-        text.textContent = 'متوقف';
+        text.textContent = data.status || 'متوقف';
       }
 
       document.getElementById('repliedCount').textContent = data.repliedCount;
@@ -109,6 +119,22 @@
         document.getElementById('welcomeInput').value = data.welcomeText;
       }
     } catch (e) {}
+  }
+
+  async function restartBot() {
+    if (!confirm('هل تريد إعادة تشغيل البوت وتحديث الاتصال؟')) return;
+    try {
+      const res = await fetch('/api/restart', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert('✅ تم إرسال أمر إعادة التشغيل بنجاح!');
+        fetchStatus();
+      } else {
+        alert('❌ خطأ: ' + data.error);
+      }
+    } catch (e) {
+      alert('حدث خطأ أثناء التواصل مع السيرفر');
+    }
   }
 
   async function requestPairingCode() {
