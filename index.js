@@ -21,6 +21,8 @@ let botStatus = 'متوقف';
 let isBotActive = true; 
 let repliedCount = 0;
 
+let messageLogs = []; // مصفوفة تخزين السجلات
+
 const cooldowns = new Map();
 const processedMessages = new Set();
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
@@ -34,6 +36,27 @@ let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقا
 1️⃣ - للاستفسار عن الأسعار والمعلومات
 2️⃣ - لمعرفة المواعيد المتاحة
 3️⃣ - موقع القاعة ووصف الطريق`;
+
+// إضافة سجل جديد
+function addLog(from, text, type) {
+    const cleanFrom = from.replace(/@s\.whatsapp\.net|@g\.us/g, '');
+    const logItem = {
+        from: cleanFrom,
+        text: text,
+        type: type, // 'incoming' أو 'outgoing'
+        time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
+        timestamp: Date.now()
+    };
+    messageLogs.unshift(logItem);
+
+    if (messageLogs.length > 300) messageLogs.pop(); // الحفاظ على أداء السيرفر
+}
+
+// تنظيف السجلات التي مضى عليها 24 ساعة تلقائياً
+setInterval(() => {
+    const now = Date.now();
+    messageLogs = messageLogs.filter(log => (now - log.timestamp) < TWENTY_FOUR_HOURS);
+}, 60 * 60 * 1000);
 
 async function initBaileys() {
     botStatus = isBotActive ? 'جاري الاتصال...' : 'متوقف مؤقتاً';
@@ -60,14 +83,21 @@ async function initBaileys() {
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
+        
         if (connection === 'close') {
-            botStatus = 'متوقف';
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
-            if (statusCode !== DisconnectReason.loggedOut) {
-                console.log('🔄 إعادة الاتصال التلقائي...');
-                initBaileys();
+            console.log(`⚠️ تم إغلاق الاتصال، رمز الحالة: ${statusCode}`);
+
+            if (statusCode === 428 || statusCode === DisconnectReason.loggedOut) {
+                console.log('🧹 مسح ملفات الجلسة المعطوبة لإعادة الإقران بنظافة...');
+                botStatus = 'يحتاج إعادة إقران';
+                try {
+                    fs.rmSync('session_auth', { recursive: true, force: true });
+                } catch(e){}
             } else {
-                console.log('❌ تم تسجيل الخروج النهائي.');
+                botStatus = 'متوقف';
+                console.log('🔄 إعادة الاتصال التلقائي...');
+                setTimeout(initBaileys, 3000);
             }
         } else if (connection === 'open') {
             botStatus = isBotActive ? 'متصل' : 'متوقف مؤقتاً';
@@ -95,10 +125,14 @@ async function initBaileys() {
         const cleanNumber = rawText.replace(/[^0-9]/g, '');
         const now = Date.now();
 
+        // تسجيل الرسالة الواردة
+        addLog(from, rawText || '[وسائط/محتوى غامض]', 'incoming');
+
         try {
             if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
                 const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
+                addLog(from, 'تم إرسال معلومات الأسعار والاتصال', 'outgoing');
 
                 setTimeout(async () => {
                     try {
@@ -112,12 +146,14 @@ async function initBaileys() {
             } else if (cleanNumber === '2' || text.includes('مواعيد') || text.includes('حجز')) {
                 const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
                 await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
+                addLog(from, 'تم إرسال معلومات المواعيد', 'outgoing');
 
             } else if (cleanNumber === '3' || text.includes('موقع') || text.includes('عنوان')) {
                 const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
                     `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
                     `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
                 await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
+                addLog(from, 'تم إرسال رابط ووصف الموقع', 'outgoing');
 
             } else {
                 if (cooldowns.has(from)) {
@@ -136,6 +172,7 @@ async function initBaileys() {
                     await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
                 }
 
+                addLog(from, 'تم إرسال رسالة الترحيب الرئيسية', 'outgoing');
                 cooldowns.set(from, now);
             }
             repliedCount++;
@@ -149,6 +186,15 @@ initBaileys();
 
 app.get('/api/status', (req, res) => {
     res.json({ status: botStatus, isBotActive, repliedCount, welcomeText });
+});
+
+app.get('/api/logs', (req, res) => {
+    res.json({ success: true, logs: messageLogs });
+});
+
+app.post('/api/clear-logs', (req, res) => {
+    messageLogs = [];
+    res.json({ success: true, message: 'تم مسح جميع السجلات بنجاح!' });
 });
 
 app.post('/api/stop', (req, res) => {
@@ -202,6 +248,6 @@ app.post('/api/pair', async (req, res) => {
 
 setInterval(() => {
     https.get('https://jasmin-hall-web.onrender.com/api/status', () => {}).on('error', () => {});
-}, 5 * 60 * 1000);
+}, 4 * 60 * 1000);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
