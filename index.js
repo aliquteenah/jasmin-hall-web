@@ -20,8 +20,9 @@ let currentPairingCode = '';
 let botStatus = 'متوقف';
 let repliedCount = 0;
 
+// استراتيجيات تتبع وتجنب التكرار
 const cooldowns = new Map();
-const processedMessages = new Set(); // لمنع تكرار الرد على نفس الرسالة
+const processedMessages = new Set();
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقاعة الكريستال* 💎✨
@@ -37,6 +38,7 @@ let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقا
 async function initBaileys() {
     botStatus = 'جاري الاتصال...';
     
+    // التأكد من وجود مجلد session_auth
     if (!fs.existsSync('session_auth')) {
         fs.mkdirSync('session_auth');
     }
@@ -44,12 +46,16 @@ async function initBaileys() {
     const { state, saveCreds } = await useMultiFileAuthState('session_auth');
     const { version } = await fetchLatestBaileysVersion();
 
+    // إعداد الاتصال المتوافق لتفادي خطأ 428
     sock = makeWASocket({
         version,
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
         auth: state,
-        browser: ["Ubuntu", "Chrome", "20.0.04"]
+        browser: ["Ubuntu", "Chrome", "20.0.04"],
+        syncFullHistory: false,      // إيقاف مزامنة الأرشيف الثقيل لمنع استهلاك الموارد
+        connectTimeoutMs: 60000,     // مهلة كافية للربط المستقر مع واتساب
+        defaultQueryTimeoutMs: undefined
     });
 
     sock.ev.on('creds.update', saveCreds);
@@ -75,23 +81,26 @@ async function initBaileys() {
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify') return;
         const m = messages[0];
-        if (!m.message || m.key.fromMe) return;
+        if (!m || !m.message || m.key.fromMe) return;
 
-        // منع معالجة الرسالة المكررة
+        // 1. منع معالجة نفس الرسالة مرتين (تفادي التكرار)
         const msgId = m.key.id;
         if (processedMessages.has(msgId)) return;
         processedMessages.add(msgId);
         
-        // تنظيف ذاكرة الرسائل القديمة كل فترة
+        // تنظيف ذاكرة المعرفات دورياً
         if (processedMessages.size > 1000) processedMessages.clear();
 
         const from = m.key.remoteJid;
         const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
         const text = rawText.toLowerCase();
+        
+        // تنظيف المدخلات لاستخراج الرقم فقط (لتجنب مشاكل الإيموجي والمسافات)
         const cleanNumber = rawText.replace(/[^0-9]/g, '');
         const now = Date.now();
 
         try {
+            // 2. منطق الرد على الخيارات
             if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
                 const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
@@ -104,12 +113,13 @@ async function initBaileys() {
                     `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
                 await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
             } else {
+                // 3. فحص مهلة الـ 24 ساعة للترحيب
                 if (cooldowns.has(from)) {
                     const lastSent = cooldowns.get(from);
                     if (now - lastSent < TWENTY_FOUR_HOURS) return;
                 }
 
-                // تحديد مسار الصورة الصحيح
+                // 4. قراءة الشعار وإرسال الترحيب
                 const imagePath = fs.existsSync(path.join(__dirname, 'public', 'logo.jpg'))
                     ? path.join(__dirname, 'public', 'logo.jpg')
                     : (fs.existsSync('logo.jpg') ? 'logo.jpg' : null);
@@ -121,13 +131,13 @@ async function initBaileys() {
                     await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
                 }
 
-                // إرسال جهة الاتصال بعد ثانية واحدة لتفادي تعليق البوت
+                // 5. إرسال جهة الاتصال بشكل منفصل بعد ثانية تفادياً للـ Crash
                 setTimeout(async () => {
                     try {
                         const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:إدارة قصر زهرة الياسمين والقاعات\nTEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\nEND:VCARD';
                         await sock.sendMessage(from, { contacts: { displayName: 'إدارة قصر زهرة الياسمين', contacts: [{ vcard }] } });
                     } catch (e) {
-                        console.error('خطأ إرسال كارت الاتصال:', e.message);
+                        console.error('خطأ إرسال جهة الاتصال:', e.message);
                     }
                 }, 1000);
 
@@ -135,19 +145,18 @@ async function initBaileys() {
             }
             repliedCount++;
         } catch (err) {
-            console.error('❌ خطأ:', err.message);
+            console.error('❌ خطأ أثناء معالجة الرسالة:', err.message);
         }
     });
 }
 
 initBaileys();
 
-// APIs للموقع
+// واجهات الاستعلام والتحكم للموقع (APIs)
 app.get('/api/status', (req, res) => {
     res.json({ status: botStatus, repliedCount, welcomeText });
 });
 
-// API إعادة تشغيل البوت
 app.post('/api/restart', async (req, res) => {
     try {
         if (sock) {
@@ -185,9 +194,9 @@ app.post('/api/pair', async (req, res) => {
     }
 });
 
-// Self-Ping لمنع السيرفر من النوم
+// Self-Ping لمنع خادم Render من الدخول في وضع الخمول (Sleep)
 setInterval(() => {
-    https.get('https://eb.onrender.com/api/status', () => {}).on('error', () => {});
+    https.get('https://jasmin-hall-web.onrender.com/api/status', () => {}).on('error', () => {});
 }, 5 * 60 * 1000);
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
