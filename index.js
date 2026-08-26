@@ -21,6 +21,7 @@ let botStatus = 'متوقف';
 let repliedCount = 0;
 
 const cooldowns = new Map();
+const processedMessages = new Set(); // لمنع تكرار الرد على نفس الرسالة
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقاعة الكريستال* 💎✨
@@ -36,7 +37,6 @@ let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقا
 async function initBaileys() {
     botStatus = 'جاري الاتصال...';
     
-    // التأكد من وجود مجلد session_auth
     if (!fs.existsSync('session_auth')) {
         fs.mkdirSync('session_auth');
     }
@@ -77,18 +77,28 @@ async function initBaileys() {
         const m = messages[0];
         if (!m.message || m.key.fromMe) return;
 
+        // منع معالجة الرسالة المكررة
+        const msgId = m.key.id;
+        if (processedMessages.has(msgId)) return;
+        processedMessages.add(msgId);
+        
+        // تنظيف ذاكرة الرسائل القديمة كل فترة
+        if (processedMessages.size > 1000) processedMessages.clear();
+
         const from = m.key.remoteJid;
-        const text = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim().toLowerCase();
+        const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
+        const text = rawText.toLowerCase();
+        const cleanNumber = rawText.replace(/[^0-9]/g, '');
         const now = Date.now();
 
         try {
-            if (text === '1' || text.includes('سعر') || text.includes('اسعار')) {
+            if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
                 const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
                 await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
-            } else if (text === '2' || text.includes('مواعيد') || text.includes('حجز')) {
+            } else if (cleanNumber === '2' || text.includes('مواعيد') || text.includes('حجز')) {
                 const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
                 await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
-            } else if (text === '3' || text.includes('موقع') || text.includes('عنوان')) {
+            } else if (cleanNumber === '3' || text.includes('موقع') || text.includes('عنوان')) {
                 const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
                     `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
                     `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
@@ -99,7 +109,7 @@ async function initBaileys() {
                     if (now - lastSent < TWENTY_FOUR_HOURS) return;
                 }
 
-                // التحقق من وجود الصورة داخل مجلد public أو المجلد الرئيسي
+                // تحديد مسار الصورة الصحيح
                 const imagePath = fs.existsSync(path.join(__dirname, 'public', 'logo.jpg'))
                     ? path.join(__dirname, 'public', 'logo.jpg')
                     : (fs.existsSync('logo.jpg') ? 'logo.jpg' : null);
@@ -111,8 +121,15 @@ async function initBaileys() {
                     await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
                 }
 
-                const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:إدارة قصر زهرة الياسمين والقاعات\nTEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\nEND:VCARD';
-                await sock.sendMessage(from, { contacts: { displayName: 'إدارة قصر زهرة الياسمين', contacts: [{ vcard }] } });
+                // إرسال جهة الاتصال بعد ثانية واحدة لتفادي تعليق البوت
+                setTimeout(async () => {
+                    try {
+                        const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:إدارة قصر زهرة الياسمين والقاعات\nTEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\nEND:VCARD';
+                        await sock.sendMessage(from, { contacts: { displayName: 'إدارة قصر زهرة الياسمين', contacts: [{ vcard }] } });
+                    } catch (e) {
+                        console.error('خطأ إرسال كارت الاتصال:', e.message);
+                    }
+                }, 1000);
 
                 cooldowns.set(from, now);
             }
@@ -130,7 +147,7 @@ app.get('/api/status', (req, res) => {
     res.json({ status: botStatus, repliedCount, welcomeText });
 });
 
-// API إعادة تشغيل البوت دون الحاجة لكود جديد
+// API إعادة تشغيل البوت
 app.post('/api/restart', async (req, res) => {
     try {
         if (sock) {
