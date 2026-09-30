@@ -4,14 +4,13 @@ import {
     useMultiFileAuthState, 
     DisconnectReason, 
     fetchLatestBaileysVersion,
-    getAggregateVotesInPollMessage,
-    initAuthCreds
+    makeInMemoryStore,
+    getAggregateVotesInPollMessage 
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-import https from 'https';
 import { OpenAI } from 'openai';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +27,7 @@ let botStatus = 'متوقف';
 let isBotActive = true;
 let messageLogs = [];
 
+const store = makeInMemoryStore({ logger: pino({ level: 'silent' }) });
 const cooldowns = new Map();
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
@@ -37,7 +37,7 @@ let botSettings = {
     welcomeImageUrl: '',
     welcomeText: `مرحباً بك في بوت الرد التلقائي 🤖✨\n\nلإضافة وتعديل بياناتك والخدمات، يرجى فتح الموقع الخاص بالبوت:\nhttps://jasmin-hall-web.onrender.com/\n\n📞 للاستفسار التواصل على الرقم:\n967717521122`,
     aiApiKey: '',
-    aiPrompt: 'أنت موظف استقبال آلي، أجب بلباقة واختصار على استفسارات العملاء بناءً على البيانات المتاحة.',
+    aiPrompt: 'أنت موظف استقبال آلي، أجب بلباقة واختصار على استفسارات العملاء.',
     pollTitle: 'يرجى اختيار الخدمة أو الاستفسار المطلوب:',
     pollOptions: [
         { name: '1️⃣ الاستفسار والدعم', reply: '📞 للاستفسار المباشر، يرجى التواصل عبر الرقم: 967717521122', image: '' },
@@ -75,12 +75,11 @@ async function askAI(userMessage) {
         });
         return response.choices[0].message.content;
     } catch (e) {
-        console.error('❌ خطأ في AI:', e.message);
+        console.error('❌ خطأ في الذكاء الاصطناعي:', e.message);
         return null;
     }
 }
 
-// دالة إرسال رد خيار الاستطلاع
 async function sendPollReply(from, optionName) {
     const matchedOption = botSettings.pollOptions.find(opt => opt.name === optionName);
     if (matchedOption) {
@@ -89,7 +88,7 @@ async function sendPollReply(from, optionName) {
         } else {
             await sock.sendMessage(from, { text: matchedOption.reply });
         }
-        addLog(from, `تم الرد على اختيار الاستطلاع: ${matchedOption.name}`, 'outgoing');
+        addLog(from, `الرد على خيار الاستطلاع: ${matchedOption.name}`, 'outgoing');
     }
 }
 
@@ -106,12 +105,12 @@ async function initBaileys() {
         browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
+    store.bind(sock.ev);
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
-            botStatus = 'متوقف';
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
             if (statusCode === 428 || statusCode === DisconnectReason.loggedOut) {
                 try { fs.rmSync('session_auth', { recursive: true, force: true }); } catch(e){}
@@ -120,15 +119,14 @@ async function initBaileys() {
             }
         } else if (connection === 'open') {
             botStatus = 'متصل';
-            console.log('✅ تم الاتصال بواتساب بنجاح!');
         }
     });
 
-    // 1. الاستماع لتصويتات الاستطلاعات (Poll Vote Updates)
+    // 1. الاستماع لتصويتات الاستطلاع
     sock.ev.on('messages.update', async (updates) => {
         for (const update of updates) {
             if (update.update?.pollUpdates) {
-                const pollCreationMessage = await sock.getMessage(update.key);
+                const pollCreationMessage = await store.loadMessage(update.key.remoteJid, update.key.id);
                 if (pollCreationMessage) {
                     const pollVotes = getAggregateVotesInPollMessage({
                         message: pollCreationMessage,
@@ -139,7 +137,7 @@ async function initBaileys() {
                         if (vote.voters.length > 0) {
                             const selectedOption = vote.name;
                             const voterJid = update.key.remoteJid;
-                            addLog(voterJid, `اختر من الاستطلاع: ${selectedOption}`, 'incoming');
+                            addLog(voterJid, `تم اختيار: ${selectedOption}`, 'incoming');
                             await sendPollReply(voterJid, selectedOption);
                         }
                     }
@@ -148,7 +146,7 @@ async function initBaileys() {
         }
     });
 
-    // 2. الاستماع للرسائل النصية العادية
+    // 2. الاستماع للرسائل النصية والذكاء الاصطناعي
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify' || !isBotActive) return;
         const m = messages[0];
@@ -158,19 +156,18 @@ async function initBaileys() {
         const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
         const now = Date.now();
 
-        // تجنب معالجة تحديثات الاستطلاع هنا
         if (m.message.pollUpdateMessage) return;
 
-        addLog(from, rawText || '[وسائط/تفاعل]', 'incoming');
+        addLog(from, rawText || '[رسالة/وسائط]', 'incoming');
 
-        // مطابقة النص العادي في حال قام المستخدم بكتابة اسم الخيار بنفسه
+        // مطابقة اختيار الاستطلاع المكتوب كنص
         const matchedOption = botSettings.pollOptions.find(opt => opt.name === rawText);
         if (matchedOption) {
             await sendPollReply(from, matchedOption.name);
             return;
         }
 
-        // إرسال الرسالة الترحيبية + الاستطلاع أول مرة
+        // إرسال رسالة الترحيب والاستطلاع للمرة الأولى فقط
         if (!cooldowns.has(from) || (now - cooldowns.get(from) > TWENTY_FOUR_HOURS)) {
             cooldowns.set(from, now);
 
@@ -193,16 +190,20 @@ async function initBaileys() {
                     }
                 });
             }
-            addLog(from, 'تم إرسال الترحيب والاستطلاع التفاعلي', 'outgoing');
+            addLog(from, 'تم إرسال الترحيب والاستطلاع', 'outgoing');
             return;
         }
 
-        // الذكاء الاصطناعي للردود العادية
-        if (rawText && botSettings.aiApiKey) {
-            const aiReply = await askAI(rawText);
-            if (aiReply) {
-                await sock.sendMessage(from, { text: aiReply });
-                addLog(from, '🤖 رد الذكاء الاصطناعي', 'outgoing');
+        // الذكاء الاصطناعي للرسائل التالية
+        if (rawText) {
+            if (botSettings.aiApiKey) {
+                const aiReply = await askAI(rawText);
+                if (aiReply) {
+                    await sock.sendMessage(from, { text: aiReply });
+                    addLog(from, '🤖 رد الذكاء الاصطناعي', 'outgoing');
+                } else {
+                    addLog(from, '⚠️ تعذر استخدام مفتاح الذكاء الاصطناعي', 'outgoing');
+                }
             }
         }
     });
@@ -210,20 +211,11 @@ async function initBaileys() {
 
 initBaileys();
 
-// Self-Ping لمنع خادم Render المجاني من الدخول في وضع النوم
-setInterval(() => {
-    https.get('https://jasmin-hall-web.onrender.com/api/status', () => {
-        console.log('🔄 جاري تنشيط السيرفر لمنع النوم...');
-    }).on('error', (err) => {
-        console.error('⚠️ خطأ تنشيط السيرفر:', err.message);
-    });
-}, 8 * 60 * 1000);
-
 app.get('/api/settings', (req, res) => res.json(botSettings));
 app.post('/api/settings', (req, res) => {
     botSettings = { ...botSettings, ...req.body };
     saveSettingsToFile();
-    res.json({ success: true, message: 'تم حفظ إعدادات الترحيب والذكاء الاصطناعي بنجاح!' });
+    res.json({ success: true, message: 'تم حفظ الإعدادات بنجاح!' });
 });
 
 app.get('/api/status', (req, res) => res.json({ status: botStatus, isBotActive }));
@@ -238,15 +230,13 @@ app.post('/api/reset-session', async (req, res) => {
 
 app.post('/api/pair', async (req, res) => {
     const { phoneNumber } = req.body;
-    if (!phoneNumber) return res.status(400).json({ success: false, error: 'يرجى إدخال الرقم' });
-    
     const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
     if (!sock) await initBaileys();
     try {
         const code = await sock.requestPairingCode(cleanedNumber);
         res.json({ success: true, code });
     } catch (err) {
-        res.status(500).json({ success: false, error: 'تعذر طلب الكود' });
+        res.status(500).json({ success: false, error: 'تعذر طلب كود الإقران' });
     }
 });
 
