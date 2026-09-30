@@ -1,5 +1,11 @@
 import express from 'express';
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion } from '@whiskeysockets/baileys';
+import { 
+    makeWASocket, 
+    useMultiFileAuthState, 
+    DisconnectReason, 
+    fetchLatestBaileysVersion,
+    getAggregateVotesInPollMessage 
+} from '@whiskeysockets/baileys';
 import pino from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -25,7 +31,6 @@ const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 const SETTINGS_FILE = 'bot_settings.json';
 
-// الإعدادات الافتراضية المحدثة بالمعلومات والروابط الخاصة بك
 let botSettings = {
     welcomeImageUrl: '',
     welcomeText: `مرحباً بك في بوت الرد التلقائي 🤖✨\n\nلإضافة وتعديل بياناتك والخدمات، يرجى فتح الموقع الخاص بالبوت:\nhttps://jasmin-hall-web.onrender.com/\n\n📞 للاستفسار التواصل على الرقم:\n967717521122`,
@@ -73,6 +78,19 @@ async function askAI(userMessage) {
     }
 }
 
+// دالة إرسال رد خيار الاستطلاع
+async function sendPollReply(from, optionName) {
+    const matchedOption = botSettings.pollOptions.find(opt => opt.name === optionName);
+    if (matchedOption) {
+        if (matchedOption.image) {
+            await sock.sendMessage(from, { image: { url: matchedOption.image }, caption: matchedOption.reply });
+        } else {
+            await sock.sendMessage(from, { text: matchedOption.reply });
+        }
+        addLog(from, `تم الرد على اختيار الاستطلاع: ${matchedOption.name}`, 'outgoing');
+    }
+}
+
 async function initBaileys() {
     if (!fs.existsSync('session_auth')) fs.mkdirSync('session_auth');
 
@@ -102,6 +120,31 @@ async function initBaileys() {
         }
     });
 
+    // 1. الاستماع لتصويتات الاستطلاعات (Poll Vote Updates)
+    sock.ev.on('messages.update', async (updates) => {
+        for (const update of updates) {
+            if (update.update?.pollUpdates) {
+                const pollCreationMessage = await sock.getMessage(update.key);
+                if (pollCreationMessage) {
+                    const pollVotes = getAggregateVotesInPollMessage({
+                        message: pollCreationMessage,
+                        pollUpdates: update.update.pollUpdates,
+                    });
+
+                    for (const vote of pollVotes) {
+                        if (vote.voters.length > 0) {
+                            const selectedOption = vote.name;
+                            const voterJid = update.key.remoteJid;
+                            addLog(voterJid, `اختر من الاستطلاع: ${selectedOption}`, 'incoming');
+                            await sendPollReply(voterJid, selectedOption);
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // 2. الاستماع للرسائل النصية العادية
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (type !== 'notify' || !isBotActive) return;
         const m = messages[0];
@@ -111,22 +154,19 @@ async function initBaileys() {
         const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
         const now = Date.now();
 
-        addLog(from, rawText || '[تفاعل/وسائط]', 'incoming');
+        // تجنب معالجة تحديثات الاستطلاع هنا
+        if (m.message.pollUpdateMessage) return;
 
-        // 1. مطابقة خيارات الاستطلاع
+        addLog(from, rawText || '[وسائط/تفاعل]', 'incoming');
+
+        // مطابقة النص العادي في حال قام المستخدم بكتابة اسم الخيار بنفسه
         const matchedOption = botSettings.pollOptions.find(opt => opt.name === rawText);
-
         if (matchedOption) {
-            if (matchedOption.image) {
-                await sock.sendMessage(from, { image: { url: matchedOption.image }, caption: matchedOption.reply });
-            } else {
-                await sock.sendMessage(from, { text: matchedOption.reply });
-            }
-            addLog(from, `تم الرد على الخيار: ${matchedOption.name}`, 'outgoing');
+            await sendPollReply(from, matchedOption.name);
             return;
         }
 
-        // 2. إرسال الرسالة الترحيبية الأولى
+        // إرسال الرسالة الترحيبية + الاستطلاع أول مرة
         if (!cooldowns.has(from) || (now - cooldowns.get(from) > TWENTY_FOUR_HOURS)) {
             cooldowns.set(from, now);
 
@@ -153,7 +193,7 @@ async function initBaileys() {
             return;
         }
 
-        // 3. الرد بالذكاء الاصطناعي عند توفره
+        // الذكاء الاصطناعي
         if (rawText && botSettings.aiApiKey) {
             const aiReply = await askAI(rawText);
             if (aiReply) {
@@ -196,4 +236,3 @@ app.post('/api/pair', async (req, res) => {
 });
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
- 
