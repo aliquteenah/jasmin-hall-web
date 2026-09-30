@@ -3,366 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة تحكم البوت - قصر زهرة الياسمين</title>
+    <title>لوحة التحكم الذكية - قصر زهرة الياسمين</title>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Tajawal', system-ui, -apple-system, sans-serif;
-        }
-
-        body {
-            background-color: #05070a;
-            color: #ffffff;
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            overflow-x: hidden;
-            position: relative;
-        }
-
-        #particles-canvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        .glow-bg {
-            position: fixed;
-            width: 300px;
-            height: 300px;
-            background: radial-gradient(circle, rgba(212, 175, 55, 0.15) 0%, rgba(0,0,0,0) 70%);
-            top: 20%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        .glass-card {
-            position: relative;
-            z-index: 10;
-            width: 100%;
-            max-width: 480px;
-            background: rgba(15, 20, 28, 0.75);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(212, 175, 55, 0.3);
-            border-radius: 28px;
-            padding: 30px 24px;
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8),
-                        inset 0 0 15px rgba(212, 175, 55, 0.1);
-            text-align: center;
-        }
-
-        .crown-icon {
-            font-size: 45px;
-            margin-bottom: 5px;
-            display: inline-block;
-            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
-        }
-
-        .title {
-            font-size: 24px;
-            font-weight: 900;
-            letter-spacing: 1px;
-            background: linear-gradient(135deg, #fff 30%, #ffd700 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 8px;
-        }
-
-        .badge-vip {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
-            border: 1px solid rgba(212, 175, 55, 0.5);
-            background: rgba(212, 175, 55, 0.08);
-            color: #ffd700;
-            font-size: 13px;
-            font-weight: 700;
-            margin-bottom: 25px;
-            box-shadow: 0 0 10px rgba(212, 175, 55, 0.2);
-        }
-
-        .glass-box {
-            background: rgba(8, 12, 18, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            padding: 15px;
-            margin-bottom: 20px;
-        }
-
-        .status-text {
-            font-size: 15px;
-            color: #a0aec0;
-        }
-
-        .status-val {
-            font-weight: bold;
-            color: #00f2fe;
-            margin-right: 5px;
-        }
-
-        input {
-            width: 100%;
-            padding: 14px;
-            border-radius: 14px;
-            border: 1px solid rgba(212, 175, 55, 0.3);
-            background: rgba(5, 8, 13, 0.8);
-            color: #00f2fe;
-            font-size: 16px;
-            text-align: center;
-            outline: none;
-            margin-bottom: 12px;
-            transition: all 0.3s ease;
-        }
-
-        input:focus {
-            border-color: #ffd700;
-            box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
-        }
-
-        .btn-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 14px;
-            border-radius: 14px;
-            border: none;
-            font-size: 14px;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(5px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-
-        .btn-gold {
-            background: linear-gradient(135deg, #ffd700 0%, #d4af37 100%);
-            color: #000;
-            box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
-            grid-column: span 2;
-        }
-
-        .btn-green {
-            background: rgba(37, 211, 102, 0.15);
-            border: 1px solid rgba(37, 211, 102, 0.4);
-            color: #25D366;
-        }
-
-        .btn-red {
-            background: rgba(231, 76, 60, 0.15);
-            border: 1px solid rgba(231, 76, 60, 0.4);
-            color: #e74c3c;
-        }
-
-        .btn-blue {
-            background: rgba(0, 242, 254, 0.12);
-            border: 1px solid rgba(0, 242, 254, 0.3);
-            color: #00f2fe;
-            grid-column: span 2;
-        }
-
-        .btn:hover {
-            transform: translateY(-2px);
-            filter: brightness(1.2);
-        }
-
-        #pairCode {
-            margin-top: 12px;
-            font-size: 20px;
-            letter-spacing: 2px;
-            color: #00f2fe;
-            text-shadow: 0 0 10px rgba(0, 242, 254, 0.5);
-        }
-
-        .logs-section {
-            margin-top: 20px;
-            text-align: right;
-        }
-
-        .logs-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .logs-title {
-            font-size: 14px;
-            color: #ffd700;
-            font-weight: bold;
-        }
-
-        .btn-clear-logs {
-            background: rgba(231, 76, 60, 0.2);
-            border: 1px solid rgba(231, 76, 60, 0.4);
-            color: #ff6b6b;
-            padding: 5px 10px;
-            border-radius: 8px;
-            font-size: 11px;
-            cursor: pointer;
-        }
-
-        .logs-container {
-            max-height: 180px;
-            overflow-y: auto;
-            background: rgba(5, 8, 13, 0.7);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            padding: 10px;
-        }
-
-        .log-item {
-            font-size: 12px;
-            padding: 6px 8px;
-            margin-bottom: 6px;
-            border-radius: 6px;
-            border-right: 3px solid #00f2fe;
-            background: rgba(255, 255, 255, 0.03);
-            word-break: break-word;
-        }
-
-        .log-item.outgoing {
-            border-right-color: #25D366;
-            background: rgba(37, 211, 102, 0.05);
-        }
-
-        .log-time {
-            font-size: 10px;
-            color: #718096;
-            margin-left: 6px;
-        }
-
-        .footer-status {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #718096;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
-        }
-
-        .dot {
-            width: 8px;
-            height: 8px;
-            background-color: #25D366;
-            border-radius: 50%;
-            box-shadow: 0 0 8px #25D366;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Tajawal', sans-serif; }
+        body { background-color: #05070a; color: #fff; min-height: 100vh; display: flex; justify-content: center; align-items: center; padding: 20px; }
+        .glass-card { width: 100%; max-width: 550px; background: rgba(15, 20, 28, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 28px; padding: 25px; box-shadow: 0 20px 50px rgba(0,0,0,0.8); }
+        .title { font-size: 22px; font-weight: 900; background: linear-gradient(135deg, #fff, #ffd700); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-align: center; margin-bottom: 15px; }
+        .section-title { font-size: 14px; color: #ffd700; font-weight: bold; margin: 15px 0 8px; border-bottom: 1px solid rgba(212, 175, 55, 0.2); padding-bottom: 4px; display: flex; justify-content: space-between; align-items: center;}
+        input, textarea, select { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid rgba(212, 175, 55, 0.3); background: rgba(5, 8, 13, 0.8); color: #00f2fe; font-size: 14px; outline: none; margin-bottom: 10px; }
+        textarea { resize: vertical; height: 80px; }
+        .btn { width: 100%; padding: 12px; border-radius: 12px; border: none; font-weight: 700; cursor: pointer; transition: 0.3s; margin-top: 5px; }
+        .btn-gold { background: linear-gradient(135deg, #ffd700, #d4af37); color: #000; }
+        .btn-blue { background: rgba(0, 242, 254, 0.15); border: 1px solid rgba(0, 242, 254, 0.4); color: #00f2fe; }
+        .btn-red { background: rgba(231, 76, 60, 0.15); border: 1px solid rgba(231, 76, 60, 0.4); color: #e74c3c; }
+        .btn-green { background: rgba(37, 211, 102, 0.15); border: 1px solid rgba(37, 211, 102, 0.4); color: #25D366; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+        .poll-option-box { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 10px; border-radius: 12px; margin-bottom: 10px; }
+        .logs-container { max-height: 120px; overflow-y: auto; background: rgba(5, 8, 13, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 8px; font-size: 12px; }
     </style>
 </head>
 <body>
 
-<canvas id="particles-canvas"></canvas>
-<div class="glow-bg"></div>
-
 <div class="glass-card">
-    <div class="crown-icon">👑</div>
-    <h1 class="title">قصر زهرة الياسمين</h1>
-    <div class="badge-vip">✦ SYSTEM VIP BOT ✦</div>
+    <h1 class="title">👑 لوحة التحكم الذكية والمطوّرة</h1>
 
-    <div class="glass-box">
-        <div class="status-text">حالة الخدمة: <span id="status" class="status-val">جاري التحميل...</span></div>
-        <div class="status-text" style="margin-top: 6px;">إجمالي الردود: <span id="repliedCount" class="status-val" style="color: #ffd700;">0</span></div>
-    </div>
-
+    <!-- قسم ربط الهاتف -->
+    <div class="section-title">📱 اتصال الواتساب</div>
     <input type="text" id="phone" placeholder="أدخل الرقم: 966504790504">
     <button class="btn btn-gold" onclick="requestPairing()">⚡ طلب كود الإقران</button>
-    <div id="pairCode"></div>
+    <div id="pairCode" style="text-align: center; font-size: 18px; color: #00f2fe; margin-top: 5px;"></div>
 
+    <!-- قسم الرسالة الترحيبية الأولى -->
+    <div class="section-title">🖼️ الرسالة الترحيبية الأولى (صورة + نص)</div>
+    <input type="text" id="welcomeImageUrl" placeholder="رابط صورة الترحيب (اختياري - اتركه فارغاً لنص فقط)">
+    <textarea id="welcomeText" placeholder="نص الرسالة الترحيبية الأولى..."></textarea>
+
+    <!-- قسم الذكاء الاصطناعي -->
+    <div class="section-title">🤖 إعدادات الذكاء الاصطناعي (AI)</div>
+    <input type="password" id="aiApiKey" placeholder="أدخل OpenAI API Key الخاص بك">
+    <textarea id="aiPrompt" placeholder="تعليمات تدريب الذكاء الاصطناعي (مثال: أنت موظف استقبال في قصر زهرة الياسمين...)"></textarea>
+
+    <!-- قسم الاستطلاعات والردود المصورة -->
+    <div class="section-title">📊 محرر الاستطلاعات والخدمات المصوّرة</div>
+    <input type="text" id="pollTitle" placeholder="عنوان الاستطلاع (مثال: أهلاً بك! اختر الخدمة المطلوبة)">
+    
+    <div id="pollOptionsContainer"></div>
+    <button class="btn btn-blue" onclick="addPollOptionField()">➕ إضافة خيار جديد للاستطلاع</button>
+
+    <button class="btn btn-green" style="margin-top: 15px;" onclick="saveSettings()">💾 حفظ جميع الإعدادات</button>
+
+    <!-- التحكم والسجلات -->
+    <div class="section-title">⚙️ التحكم بالسيرفر والأنظمة</div>
     <div class="btn-grid">
         <button class="btn btn-green" onclick="startBot()">▶️ تشغيل</button>
         <button class="btn btn-red" onclick="stopBot()">⏸️ إيقاف</button>
-        <button class="btn btn-blue" onclick="restartBot()">🔄 إعادة تنشيط السيرفر</button>
         <button class="btn btn-red" style="grid-column: span 2;" onclick="resetSession()">🗑️ تسجيل الخروج وربط رقم جديد</button>
     </div>
 
-    <div class="logs-section">
-        <div class="logs-header">
-            <span class="logs-title">📋 سجل الرسائل (24 ساعة)</span>
-            <button class="btn-clear-logs" onclick="clearLogs()">🗑️ مسح السجلات</button>
-        </div>
-        <div class="logs-container" id="logsContainer">
-            <div style="text-align: center; color: #718096; font-size: 12px;">جاري تحميل السجلات...</div>
-        </div>
-    </div>
-
-    <div class="footer-status">
-        <div class="dot"></div>
-        <span>الخادم متصل ومحمي</span>
-    </div>
+    <div class="section-title">📋 السجلات التفاعلية الحية</div>
+    <div class="logs-container" id="logsContainer">جاري التحميل...</div>
 </div>
 
 <script>
-const canvas = document.getElementById('particles-canvas');
-const ctx = canvas.getContext('2d');
-let particles = [];
+let pollOptionsCount = 0;
 
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
-
-class Particle {
-    constructor() { this.reset(); }
-    reset() {
-        this.x = Math.random() * canvas.width;
-        this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 2 + 0.5;
-        this.speedY = Math.random() * 0.3 + 0.1;
-        this.opacity = Math.random();
-        this.color = Math.random() > 0.4 ? '#ffd700' : '#00f2fe';
-    }
-    update() {
-        this.y -= this.speedY;
-        if (this.y < 0) this.reset();
-    }
-    draw() {
-        ctx.fillStyle = this.color;
-        ctx.globalAlpha = this.opacity;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fill();
-    }
+function addPollOptionField(optionText = '', replyText = '', imageUrl = '') {
+    pollOptionsCount++;
+    const container = document.getElementById('pollOptionsContainer');
+    const div = document.createElement('div');
+    div.className = 'poll-option-box';
+    div.id = `pollOpt_${pollOptionsCount}`;
+    div.innerHTML = `
+        <input type="text" class="opt-name" value="${optionText}" placeholder="اسم الخيار (مثال: 1️⃣ الأسعار)">
+        <textarea class="opt-reply" placeholder="الرد النصي المجهز">${replyText}</textarea>
+        <input type="text" class="opt-image" value="${imageUrl}" placeholder="رابط الصورة (اختياري - اتركه فارغاً لنص فقط)">
+        <button class="btn btn-red" style="padding: 5px; font-size: 11px;" onclick="document.getElementById('pollOpt_${pollOptionsCount}').remove()">حذف الخيار</button>
+    `;
+    container.appendChild(div);
 }
 
-for (let i = 0; i < 60; i++) particles.push(new Particle());
-
-function animateParticles() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    particles.forEach(p => { p.update(); p.draw(); });
-    requestAnimationFrame(animateParticles);
-}
-animateParticles();
-
-async function updateStatus() {
+async function loadSettings() {
     try {
-        const res = await fetch('/api/status');
+        const res = await fetch('/api/settings');
         const data = await res.json();
-        document.getElementById('status').innerText = data.status;
-        document.getElementById('repliedCount').innerText = data.repliedCount;
+        document.getElementById('welcomeImageUrl').value = data.welcomeImageUrl || '';
+        document.getElementById('welcomeText').value = data.welcomeText || '';
+        document.getElementById('aiApiKey').value = data.aiApiKey || '';
+        document.getElementById('aiPrompt').value = data.aiPrompt || '';
+        document.getElementById('pollTitle').value = data.pollTitle || '';
+        
+        document.getElementById('pollOptionsContainer').innerHTML = '';
+        if (data.pollOptions && data.pollOptions.length > 0) {
+            data.pollOptions.forEach(opt => addPollOptionField(opt.name, opt.reply, opt.image));
+        } else {
+            addPollOptionField('1️⃣ الأسعار والمعلومات', 'أسعارنا تبدأ من...', '');
+            addPollOptionField('2️⃣ موقع القاعة', 'موقعنا على خرائط جوجل...', '');
+        }
     } catch(e) {}
+}
+
+async function saveSettings() {
+    const welcomeImageUrl = document.getElementById('welcomeImageUrl').value;
+    const welcomeText = document.getElementById('welcomeText').value;
+    const aiApiKey = document.getElementById('aiApiKey').value;
+    const aiPrompt = document.getElementById('aiPrompt').value;
+    const pollTitle = document.getElementById('pollTitle').value;
+
+    const optionBoxes = document.querySelectorAll('.poll-option-box');
+    const pollOptions = [];
+    optionBoxes.forEach(box => {
+        const name = box.querySelector('.opt-name').value;
+        const reply = box.querySelector('.opt-reply').value;
+        const image = box.querySelector('.opt-image').value;
+        if (name) pollOptions.push({ name, reply, image });
+    });
+
+    const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ welcomeImageUrl, welcomeText, aiApiKey, aiPrompt, pollTitle, pollOptions })
+    });
+    const data = await res.json();
+    alert(data.message);
+}
+
+async function requestPairing() {
+    const phoneNumber = document.getElementById('phone').value;
+    if (!phoneNumber) return alert("يرجى إدخال الرقم أولاً");
+    const res = await fetch('/api/pair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phoneNumber })
+    });
+    const data = await res.json();
+    if(data.success) document.getElementById('pairCode').innerText = "كود الإقران: " + data.code;
+    else alert(data.error);
+}
+
+async function resetSession() {
+    if (!confirm("هل أنت تأكد من مسح الجلسة؟")) return;
+    const res = await fetch('/api/reset-session', { method: 'POST' });
+    const data = await res.json();
+    alert(data.message);
 }
 
 async function fetchLogs() {
@@ -370,82 +153,16 @@ async function fetchLogs() {
         const res = await fetch('/api/logs');
         const data = await res.json();
         const container = document.getElementById('logsContainer');
-        
         if (!data.logs || data.logs.length === 0) {
-            container.innerHTML = '<div style="text-align: center; color: #718096; font-size: 12px;">لا توجد سجلات حالياً</div>';
+            container.innerHTML = 'لا توجد سجلات حالياً';
             return;
         }
-
-        container.innerHTML = data.logs.map(log => `
-            <div class="log-item ${log.type}">
-                <strong>${log.type === 'incoming' ? '📥 ' + log.from : '📤 البوت'}:</strong> 
-                <span>${log.text}</span>
-                <span class="log-time">${log.time}</span>
-            </div>
-        `).join('');
+        container.innerHTML = data.logs.map(log => `<div><b>${log.from}:</b> ${log.text}</div>`).join('');
     } catch(e) {}
 }
 
-async function clearLogs() {
-    if (!confirm("هل أنت تأكد من رغبتك في حذف السجلات؟")) return;
-    const res = await fetch('/api/clear-logs', { method: 'POST' });
-    const data = await res.json();
-    alert(data.message);
-    fetchLogs();
-}
-
-async function startBot() {
-    const res = await fetch('/api/start', { method: 'POST' });
-    const data = await res.json();
-    alert(data.message);
-    updateStatus();
-}
-
-async function stopBot() {
-    const res = await fetch('/api/stop', { method: 'POST' });
-    const data = await res.json();
-    alert(data.message);
-    updateStatus();
-}
-
-async function restartBot() {
-    const res = await fetch('/api/restart', { method: 'POST' });
-    const data = await res.json();
-    alert(data.message);
-    updateStatus();
-}
-
-async function resetSession() {
-    if (!confirm("هل أنت تأكد من رغبتك في مسح الجلسة وتغيير رقم البوت؟")) return;
-    const res = await fetch('/api/reset-session', { method: 'POST' });
-    const data = await res.json();
-    alert(data.message);
-    document.getElementById('pairCode').innerText = '';
-    updateStatus();
-}
-
-async function requestPairing() {
-    const phoneNumber = document.getElementById('phone').value;
-    if (!phoneNumber) return alert("يرجى إدخال الرقم أولاً");
-    
-    const res = await fetch('/api/pair', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phoneNumber })
-    });
-    const data = await res.json();
-    if(data.success) {
-        document.getElementById('pairCode').innerText = "كود الإقران: " + data.code;
-    } else {
-        alert(data.error);
-    }
-}
-
-setInterval(updateStatus, 3000);
+loadSettings();
 setInterval(fetchLogs, 4000);
-updateStatus();
-fetchLogs();
 </script>
-
 </body>
 </html>
