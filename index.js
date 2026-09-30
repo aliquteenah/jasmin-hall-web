@@ -3,8 +3,8 @@ import { makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaile
 import pino from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import https from 'https';
 import fs from 'fs';
+import { OpenAI } from 'openai';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,52 +16,65 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 let sock = null;
-let currentPairingCode = '';
 let botStatus = 'متوقف';
-let isBotActive = true; 
-let repliedCount = 0;
-
+let isBotActive = true;
 let messageLogs = [];
 
 const cooldowns = new Map();
-const processedMessages = new Set();
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
-let welcomeText = `أهلاً بك في *قصر زهرة الياسمين وقاعة الكريستال* 💎✨
+const SETTINGS_FILE = 'bot_settings.json';
 
-يسعدنا خدمتكم وتلبية استفساراتكم لتنسيق حفلكم المميز.
+// الإعدادات الافتراضية المحدثة بالمعلومات والروابط الخاصة بك
+let botSettings = {
+    welcomeImageUrl: '',
+    welcomeText: `مرحباً بك في بوت الرد التلقائي 🤖✨\n\nلإضافة وتعديل بياناتك والخدمات، يرجى فتح الموقع الخاص بالبوت:\nhttps://jasmin-hall-web.onrender.com/\n\n📞 للاستفسار التواصل على الرقم:\n967717521122`,
+    aiApiKey: '',
+    aiPrompt: 'أنت موظف استقبال آلي، أجب بلباقة واختصار على استفسارات العملاء بناءً على البيانات المتاحة.',
+    pollTitle: 'يرجى اختيار الخدمة أو الاستفسار المطلوب:',
+    pollOptions: [
+        { name: '1️⃣ الاستفسار والدعم', reply: '📞 للاستفسار المباشر، يرجى التواصل عبر الرقم: 967717521122', image: '' },
+        { name: '2️⃣ لوحة التحكم', reply: '🌐 رابط لوحة التحكم لإدارة البوت:\nhttps://jasmin-hall-web.onrender.com/', image: '' }
+    ]
+};
 
-يرجى إرسال رقم الخيار المطلوب:
+if (fs.existsSync(SETTINGS_FILE)) {
+    try {
+        botSettings = JSON.parse(fs.readFileSync(SETTINGS_FILE));
+    } catch (e) {}
+}
 
-1️⃣ - للاستفسار عن الأسعار والمعلومات
-2️⃣ - لمعرفة المواعيد المتاحة
-3️⃣ - موقع القاعة ووصف الطريق`;
+function saveSettingsToFile() {
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(botSettings, null, 2));
+}
 
 function addLog(from, text, type) {
     const cleanFrom = from.replace(/@s\.whatsapp\.net|@g\.us/g, '');
-    const logItem = {
-        from: cleanFrom,
-        text: text,
-        type: type,
-        time: new Date().toLocaleTimeString('ar-SA', { hour: '2-digit', minute: '2-digit' }),
-        timestamp: Date.now()
-    };
-    messageLogs.unshift(logItem);
-
-    if (messageLogs.length > 300) messageLogs.pop();
+    messageLogs.unshift({ from: cleanFrom, text, type, time: new Date().toLocaleTimeString('ar-SA') });
+    if (messageLogs.length > 100) messageLogs.pop();
 }
 
-setInterval(() => {
-    const now = Date.now();
-    messageLogs = messageLogs.filter(log => (now - log.timestamp) < TWENTY_FOUR_HOURS);
-}, 60 * 60 * 1000);
+async function askAI(userMessage) {
+    if (!botSettings.aiApiKey) return null;
+    try {
+        const openai = new OpenAI({ apiKey: botSettings.aiApiKey });
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+                { role: "system", content: botSettings.aiPrompt },
+                { role: "user", content: userMessage }
+            ],
+            max_tokens: 300
+        });
+        return response.choices[0].message.content;
+    } catch (e) {
+        console.error('❌ خطأ في AI:', e.message);
+        return null;
+    }
+}
 
 async function initBaileys() {
-    botStatus = isBotActive ? 'جاري الاتصال...' : 'متوقف مؤقتاً';
-    
-    if (!fs.existsSync('session_auth')) {
-        fs.mkdirSync('session_auth');
-    }
+    if (!fs.existsSync('session_auth')) fs.mkdirSync('session_auth');
 
     const { state, saveCreds } = await useMultiFileAuthState('session_auth');
     const { version } = await fetchLatestBaileysVersion();
@@ -69,199 +82,118 @@ async function initBaileys() {
     sock = makeWASocket({
         version,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false,
         auth: state,
-        browser: ["Ubuntu", "Chrome", "20.0.04"],
-        syncFullHistory: false,
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: undefined
+        browser: ["Ubuntu", "Chrome", "20.0.04"]
     });
 
     sock.ev.on('creds.update', saveCreds);
 
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
-        
         if (connection === 'close') {
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
-            const errorMsg = (lastDisconnect?.error)?.message || '';
-            console.log(`⚠️ تم إغلاق الاتصال، رمز الحالة: ${statusCode} | السبب: ${errorMsg}`);
-
-            if (statusCode === 428 || statusCode === DisconnectReason.loggedOut || errorMsg.includes('Bad MAC')) {
-                console.log('🧹 مسح ملفات الجلسة المعطوبة لإعادة الإقران بنظافة...');
-                botStatus = 'يحتاج إعادة إقران';
-                try {
-                    fs.rmSync('session_auth', { recursive: true, force: true });
-                } catch(e){}
+            if (statusCode === 428 || statusCode === DisconnectReason.loggedOut) {
+                try { fs.rmSync('session_auth', { recursive: true, force: true }); } catch(e){}
             } else {
-                botStatus = 'متوقف';
-                console.log('🔄 إعادة الاتصال التلقائي...');
                 setTimeout(initBaileys, 3000);
             }
         } else if (connection === 'open') {
-            botStatus = isBotActive ? 'متصل' : 'متوقف مؤقتاً';
-            currentPairingCode = '';
-            console.log('✅ تم الاتصال بنجاح بواتساب!');
+            botStatus = 'متصل';
         }
     });
 
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify') return;
-        if (!isBotActive) return;
-
+        if (type !== 'notify' || !isBotActive) return;
         const m = messages[0];
         if (!m || !m.message || m.key.fromMe) return;
 
-        const msgId = m.key.id;
-        if (processedMessages.has(msgId)) return;
-        processedMessages.add(msgId);
-        
-        if (processedMessages.size > 1000) processedMessages.clear();
-
         const from = m.key.remoteJid;
         const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
-        const text = rawText.toLowerCase();
-        const cleanNumber = rawText.replace(/[^0-9]/g, '');
         const now = Date.now();
 
-        addLog(from, rawText || '[محتوى وسائط]', 'incoming');
+        addLog(from, rawText || '[تفاعل/وسائط]', 'incoming');
 
-        try {
-            if (cleanNumber === '1' || text.includes('سعر') || text.includes('اسعار')) {
-                const priceInfo = `📞 *للأستفسار عن الأسعار والمعلومات، يرجى التواصل على الرقم:*\n0504790504`;
-                await sock.sendMessage(from, { text: priceInfo }, { quoted: m });
-                addLog(from, 'تم إرسال معلومات الأسعار والاتصال', 'outgoing');
+        // 1. مطابقة خيارات الاستطلاع
+        const matchedOption = botSettings.pollOptions.find(opt => opt.name === rawText);
 
-                setTimeout(async () => {
-                    try {
-                        const vcard = 'BEGIN:VCARD\nVERSION:3.0\nFN:إدارة قصر زهرة الياسمين والقاعات\nTEL;type=CELL;type=VOICE;waid=966504790504:+966504790504\nEND:VCARD';
-                        await sock.sendMessage(from, { contacts: { displayName: 'إدارة قصر زهرة الياسمين', contacts: [{ vcard }] } });
-                    } catch (e) {
-                        console.error('خطأ إرسال جهة الاتصال:', e.message);
-                    }
-                }, 500);
-
-            } else if (cleanNumber === '2' || text.includes('مواعيد') || text.includes('حجز')) {
-                const datesInfo = `📅 *المواعيد المتاحة:*\nجميع الأوقات متوفرة حالياً. يرجى التواصل معنا لتأكيد حجزك.`;
-                await sock.sendMessage(from, { text: datesInfo }, { quoted: m });
-                addLog(from, 'تم إرسال معلومات المواعيد', 'outgoing');
-
-            } else if (cleanNumber === '3' || text.includes('موقع') || text.includes('عنوان')) {
-                const locationInfo = `📍 *موقع قصر زهرة الياسمين وقاعة الكريستال بالكوامله*\n\n` +
-                    `🔗 *رابط الموقع على خرائط جوجل:*\nhttps://maps.app.goo.gl/FUWa4WQajtJBzjmP9?g_st=aw\n\n` +
-                    `🚗 *الوصف:* \nعند نزولك من الطريق الدولي للكوامله تواجه دوار الدلال يسارك، امش سيدا ثم تجد أمامك مطب يمينك ممشى ومسجد وفي نهاية الممشى حديقة قبلها بمترين لف يمين تشاهد القاعة أمامك ٢٥٠ متر طريق اسفلت حتى بوابة القاعة.`;
-                await sock.sendMessage(from, { text: locationInfo }, { quoted: m });
-                addLog(from, 'تم إرسال رابط ووصف الموقع', 'outgoing');
-
+        if (matchedOption) {
+            if (matchedOption.image) {
+                await sock.sendMessage(from, { image: { url: matchedOption.image }, caption: matchedOption.reply });
             } else {
-                if (cooldowns.has(from)) {
-                    const lastSent = cooldowns.get(from);
-                    if (now - lastSent < TWENTY_FOUR_HOURS) return;
-                }
-
-                const imagePath = fs.existsSync(path.join(__dirname, 'public', 'logo.jpg'))
-                    ? path.join(__dirname, 'public', 'logo.jpg')
-                    : (fs.existsSync('logo.jpg') ? 'logo.jpg' : null);
-
-                if (imagePath) {
-                    const imgBuffer = fs.readFileSync(imagePath);
-                    await sock.sendMessage(from, { image: imgBuffer, caption: welcomeText, mimetype: 'image/jpeg' }, { quoted: m });
-                } else {
-                    await sock.sendMessage(from, { text: welcomeText }, { quoted: m });
-                }
-
-                addLog(from, 'تم إرسال رسالة الترحيب الرئيسية', 'outgoing');
-                cooldowns.set(from, now);
+                await sock.sendMessage(from, { text: matchedOption.reply });
             }
-            repliedCount++;
-        } catch (err) {
-            console.error('❌ خطأ أثناء معالجة الرسالة:', err.message);
+            addLog(from, `تم الرد على الخيار: ${matchedOption.name}`, 'outgoing');
+            return;
+        }
+
+        // 2. إرسال الرسالة الترحيبية الأولى
+        if (!cooldowns.has(from) || (now - cooldowns.get(from) > TWENTY_FOUR_HOURS)) {
+            cooldowns.set(from, now);
+
+            if (botSettings.welcomeImageUrl) {
+                await sock.sendMessage(from, { 
+                    image: { url: botSettings.welcomeImageUrl }, 
+                    caption: botSettings.welcomeText 
+                });
+            } else if (botSettings.welcomeText) {
+                await sock.sendMessage(from, { text: botSettings.welcomeText });
+            }
+
+            const pollValues = botSettings.pollOptions.map(opt => opt.name);
+            if (pollValues.length > 0) {
+                await sock.sendMessage(from, {
+                    poll: {
+                        name: botSettings.pollTitle,
+                        values: pollValues,
+                        selectableCount: 1
+                    }
+                });
+            }
+            addLog(from, 'تم إرسال الترحيب والاستطلاع التفاعلي', 'outgoing');
+            return;
+        }
+
+        // 3. الرد بالذكاء الاصطناعي عند توفره
+        if (rawText && botSettings.aiApiKey) {
+            const aiReply = await askAI(rawText);
+            if (aiReply) {
+                await sock.sendMessage(from, { text: aiReply });
+                addLog(from, '🤖 رد الذكاء الاصطناعي', 'outgoing');
+            }
         }
     });
 }
 
 initBaileys();
 
-app.get('/api/status', (req, res) => {
-    res.json({ status: botStatus, isBotActive, repliedCount, welcomeText });
+app.get('/api/settings', (req, res) => res.json(botSettings));
+app.post('/api/settings', (req, res) => {
+    botSettings = { ...botSettings, ...req.body };
+    saveSettingsToFile();
+    res.json({ success: true, message: 'تم حفظ إعدادات الترحيب والذكاء الاصطناعي بنجاح!' });
 });
 
-app.get('/api/logs', (req, res) => {
-    res.json({ success: true, logs: messageLogs });
-});
-
-app.post('/api/clear-logs', (req, res) => {
-    messageLogs = [];
-    res.json({ success: true, message: 'تم مسح جميع السجلات بنجاح!' });
-});
-
-app.post('/api/stop', (req, res) => {
-    isBotActive = false;
-    botStatus = 'متوقف مؤقتاً';
-    res.json({ success: true, message: 'تم إيقاف الرد الآلي للبوت.' });
-});
-
-app.post('/api/start', (req, res) => {
-    isBotActive = true;
-    botStatus = 'متصل';
-    res.json({ success: true, message: 'تم تفعيل الرد الآلي للبوت.' });
-});
-
-app.post('/api/restart', async (req, res) => {
-    try {
-        if (sock) {
-            sock.end(undefined);
-        }
-        await initBaileys();
-        res.json({ success: true, message: 'تمت إعادة تشغيل البوت بنجاح!' });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
-});
+app.get('/api/status', (req, res) => res.json({ status: botStatus, isBotActive }));
+app.get('/api/logs', (req, res) => res.json({ logs: messageLogs }));
 
 app.post('/api/reset-session', async (req, res) => {
-    try {
-        if (sock) {
-            sock.end(undefined);
-        }
-        if (fs.existsSync('session_auth')) {
-            fs.rmSync('session_auth', { recursive: true, force: true });
-        }
-        botStatus = 'يحتاج إعادة إقران';
-        await initBaileys();
-        res.json({ success: true, message: 'تم مسح الجلسة بنجاح! يمكنك الآن طلب كود إقران للرقم الجديد.' });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
-    }
+    if (sock) sock.end(undefined);
+    if (fs.existsSync('session_auth')) fs.rmSync('session_auth', { recursive: true, force: true });
+    await initBaileys();
+    res.json({ success: true, message: 'تم مسح الجلسة بنجاح!' });
 });
 
 app.post('/api/pair', async (req, res) => {
-    let { phoneNumber } = req.body;
-    if (!phoneNumber) return res.status(400).json({ success: false, error: 'يرجى إدخال الرقم' });
-
+    const { phoneNumber } = req.body;
+    const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
+    if (!sock) await initBaileys();
     try {
-        const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
-        if (!sock) await initBaileys();
-
-        if (!sock.authState.creds.registered) {
-            setTimeout(async () => {
-                try {
-                    const code = await sock.requestPairingCode(cleanedNumber);
-                    res.json({ success: true, code });
-                } catch (err) {
-                    res.status(500).json({ success: false, error: 'تعذر طلب الكود' });
-                }
-            }, 2000);
-        } else {
-            res.json({ success: false, error: 'الجهاز مقترن بالفعل! استخدم زر تسجيل الخروج وربط رقم جديد.' });
-        }
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
+        const code = await sock.requestPairingCode(cleanedNumber);
+        res.json({ success: true, code });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'تعذر طلب الكود' });
     }
 });
 
-setInterval(() => {
-    https.get('https://jasmin-hall-web.onrender.com/api/status', () => {}).on('error', () => {});
-}, 4 * 60 * 1000);
-
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+ 
