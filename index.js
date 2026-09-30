@@ -122,89 +122,92 @@ async function initBaileys() {
         }
     });
 
-    // 1. الاستماع لتصويتات الاستطلاع
+    // معالجة تصويت الاستطلاعات بحماية الأخطاء
     sock.ev.on('messages.update', async (updates) => {
-        for (const update of updates) {
-            if (update.update?.pollUpdates) {
-                const pollCreationMessage = await store.loadMessage(update.key.remoteJid, update.key.id);
-                if (pollCreationMessage) {
-                    const pollVotes = getAggregateVotesInPollMessage({
-                        message: pollCreationMessage,
-                        pollUpdates: update.update.pollUpdates,
-                    });
+        try {
+            for (const update of updates) {
+                if (update.update?.pollUpdates) {
+                    const pollCreationMessage = await store.loadMessage(update.key.remoteJid, update.key.id);
+                    if (pollCreationMessage) {
+                        const pollVotes = getAggregateVotesInPollMessage({
+                            message: pollCreationMessage,
+                            pollUpdates: update.update.pollUpdates,
+                        });
 
-                    for (const vote of pollVotes) {
-                        if (vote.voters.length > 0) {
-                            const selectedOption = vote.name;
-                            const voterJid = update.key.remoteJid;
-                            addLog(voterJid, `تم اختيار: ${selectedOption}`, 'incoming');
-                            await sendPollReply(voterJid, selectedOption);
+                        for (const vote of pollVotes) {
+                            if (vote.voters.length > 0) {
+                                const selectedOption = vote.name;
+                                const voterJid = update.key.remoteJid;
+                                addLog(voterJid, `تم اختيار: ${selectedOption}`, 'incoming');
+                                await sendPollReply(voterJid, selectedOption);
+                            }
                         }
                     }
                 }
             }
+        } catch (e) {
+            console.log("خطأ مؤقت في استقبال الاستطلاع واستكمال العمل:", e.message);
         }
     });
 
-    // 2. الاستماع للرسائل النصية والذكاء الاصطناعي
+    // معالجة الرسائل والذكاء الاصطناعي بحماية الأخطاء
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
-        if (type !== 'notify' || !isBotActive) return;
-        const m = messages[0];
-        if (!m || !m.message || m.key.fromMe) return;
+        try {
+            if (type !== 'notify' || !isBotActive) return;
+            const m = messages[0];
+            if (!m || !m.message || m.key.fromMe) return;
 
-        const from = m.key.remoteJid;
-        const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
-        const now = Date.now();
+            const from = m.key.remoteJid;
+            const rawText = (m.message.conversation || m.message.extendedTextMessage?.text || '').trim();
+            const now = Date.now();
 
-        if (m.message.pollUpdateMessage) return;
+            if (m.message.pollUpdateMessage) return;
 
-        addLog(from, rawText || '[رسالة/وسائط]', 'incoming');
+            addLog(from, rawText || '[رسالة/وسائط]', 'incoming');
 
-        // مطابقة اختيار الاستطلاع المكتوب كنص
-        const matchedOption = botSettings.pollOptions.find(opt => opt.name === rawText);
-        if (matchedOption) {
-            await sendPollReply(from, matchedOption.name);
-            return;
-        }
-
-        // إرسال رسالة الترحيب والاستطلاع للمرة الأولى فقط
-        if (!cooldowns.has(from) || (now - cooldowns.get(from) > TWENTY_FOUR_HOURS)) {
-            cooldowns.set(from, now);
-
-            if (botSettings.welcomeImageUrl) {
-                await sock.sendMessage(from, { 
-                    image: { url: botSettings.welcomeImageUrl }, 
-                    caption: botSettings.welcomeText 
-                });
-            } else if (botSettings.welcomeText) {
-                await sock.sendMessage(from, { text: botSettings.welcomeText });
+            const matchedOption = botSettings.pollOptions.find(opt => opt.name === rawText);
+            if (matchedOption) {
+                await sendPollReply(from, matchedOption.name);
+                return;
             }
 
-            const pollValues = botSettings.pollOptions.map(opt => opt.name);
-            if (pollValues.length > 0) {
-                await sock.sendMessage(from, {
-                    poll: {
-                        name: botSettings.pollTitle,
-                        values: pollValues,
-                        selectableCount: 1
+            if (!cooldowns.has(from) || (now - cooldowns.get(from) > TWENTY_FOUR_HOURS)) {
+                cooldowns.set(from, now);
+
+                if (botSettings.welcomeImageUrl) {
+                    await sock.sendMessage(from, { 
+                        image: { url: botSettings.welcomeImageUrl }, 
+                        caption: botSettings.welcomeText 
+                    });
+                } else if (botSettings.welcomeText) {
+                    await sock.sendMessage(from, { text: botSettings.welcomeText });
+                }
+
+                const pollValues = botSettings.pollOptions.map(opt => opt.name);
+                if (pollValues.length > 0) {
+                    await sock.sendMessage(from, {
+                        poll: {
+                            name: botSettings.pollTitle,
+                            values: pollValues,
+                            selectableCount: 1
+                        }
+                    });
+                }
+                addLog(from, 'تم إرسال الترحيب والاستطلاع', 'outgoing');
+                return;
+            }
+
+            if (rawText) {
+                if (botSettings.aiApiKey) {
+                    const aiReply = await askAI(rawText);
+                    if (aiReply) {
+                        await sock.sendMessage(from, { text: aiReply });
+                        addLog(from, '🤖 رد الذكاء الاصطناعي', 'outgoing');
                     }
-                });
-            }
-            addLog(from, 'تم إرسال الترحيب والاستطلاع', 'outgoing');
-            return;
-        }
-
-        // الذكاء الاصطناعي للرسائل التالية
-        if (rawText) {
-            if (botSettings.aiApiKey) {
-                const aiReply = await askAI(rawText);
-                if (aiReply) {
-                    await sock.sendMessage(from, { text: aiReply });
-                    addLog(from, '🤖 رد الذكاء الاصطناعي', 'outgoing');
-                } else {
-                    addLog(from, '⚠️ تعذر استخدام مفتاح الذكاء الاصطناعي', 'outgoing');
                 }
             }
+        } catch (e) {
+            console.log("تجاوز خطأ التشفير الفردي للرسالة:", e.message);
         }
     });
 }
