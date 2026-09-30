@@ -1,5 +1,5 @@
 {
-  "name": "jasmin-hall-bot-web",
+  "name": "whatsapp-bot",
   "version": "1.0.0",
   "type": "module",
   "main": "index.js",
@@ -7,8 +7,9 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.0",
+    "@whiskeysockets/baileys": "^6.7.18",
     "express": "^4.19.2",
-    "pino": "^9.0.0"
+    "openai": "^4.56.0",
+    "pino": "^9.3.2"
   }
 }
