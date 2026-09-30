@@ -4,12 +4,14 @@ import {
     useMultiFileAuthState, 
     DisconnectReason, 
     fetchLatestBaileysVersion,
-    getAggregateVotesInPollMessage 
+    getAggregateVotesInPollMessage,
+    initAuthCreds
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import https from 'https';
 import { OpenAI } from 'openai';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -109,6 +111,7 @@ async function initBaileys() {
     sock.ev.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
         if (connection === 'close') {
+            botStatus = 'متوقف';
             const statusCode = (lastDisconnect?.error)?.output?.statusCode;
             if (statusCode === 428 || statusCode === DisconnectReason.loggedOut) {
                 try { fs.rmSync('session_auth', { recursive: true, force: true }); } catch(e){}
@@ -117,6 +120,7 @@ async function initBaileys() {
             }
         } else if (connection === 'open') {
             botStatus = 'متصل';
+            console.log('✅ تم الاتصال بواتساب بنجاح!');
         }
     });
 
@@ -193,7 +197,7 @@ async function initBaileys() {
             return;
         }
 
-        // الذكاء الاصطناعي
+        // الذكاء الاصطناعي للردود العادية
         if (rawText && botSettings.aiApiKey) {
             const aiReply = await askAI(rawText);
             if (aiReply) {
@@ -205,6 +209,15 @@ async function initBaileys() {
 }
 
 initBaileys();
+
+// Self-Ping لمنع خادم Render المجاني من الدخول في وضع النوم
+setInterval(() => {
+    https.get('https://jasmin-hall-web.onrender.com/api/status', () => {
+        console.log('🔄 جاري تنشيط السيرفر لمنع النوم...');
+    }).on('error', (err) => {
+        console.error('⚠️ خطأ تنشيط السيرفر:', err.message);
+    });
+}, 8 * 60 * 1000);
 
 app.get('/api/settings', (req, res) => res.json(botSettings));
 app.post('/api/settings', (req, res) => {
@@ -225,6 +238,8 @@ app.post('/api/reset-session', async (req, res) => {
 
 app.post('/api/pair', async (req, res) => {
     const { phoneNumber } = req.body;
+    if (!phoneNumber) return res.status(400).json({ success: false, error: 'يرجى إدخال الرقم' });
+    
     const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
     if (!sock) await initBaileys();
     try {
