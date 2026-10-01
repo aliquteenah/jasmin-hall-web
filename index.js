@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import { OpenAI } from 'openai';
+import Groq from 'groq-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -36,6 +37,7 @@ const SETTINGS_FILE = 'bot_settings.json';
 let botSettings = {
     welcomeImageUrl: '',
     welcomeText: `مرحباً بك في بوت الرد التلقائي 🤖✨\n\nلإضافة وتعديل بياناتك والخدمات، يرجى فتح الموقع الخاص بالبوت:\nhttps://jasmin-hall-web.onrender.com/\n\n📞 للاستفسار التواصل على الرقم:\n967717521122`,
+    groqApiKey: '',
     aiApiKey: '',
     aiPrompt: 'أنت موظف استقبال آلي، أجب بلباقة واختصار على استفسارات العملاء.',
     pollTitle: 'يرجى اختيار الخدمة أو الاستفسار المطلوب:',
@@ -61,23 +63,45 @@ function addLog(from, text, type) {
     if (messageLogs.length > 100) messageLogs.pop();
 }
 
+// دالة الذكاء الاصطناعي التي تدعم Groq و OpenAI
 async function askAI(userMessage) {
-    if (!botSettings.aiApiKey) return null;
-    try {
-        const openai = new OpenAI({ apiKey: botSettings.aiApiKey });
-        const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-                { role: "system", content: botSettings.aiPrompt },
-                { role: "user", content: userMessage }
-            ],
-            max_tokens: 300
-        });
-        return response.choices[0].message.content;
-    } catch (e) {
-        console.error('❌ خطأ في الذكاء الاصطناعي:', e.message);
-        return null;
+    // 1. استخدام Groq أولاً إن وجد
+    if (botSettings.groqApiKey) {
+        try {
+            const groq = new Groq({ apiKey: botSettings.groqApiKey });
+            const completion = await groq.chat.completions.create({
+                messages: [
+                    { role: 'system', content: botSettings.aiPrompt },
+                    { role: 'user', content: userMessage }
+                ],
+                model: 'llama-3.1-8b-instant',
+                max_tokens: 300
+            });
+            return completion.choices[0]?.message?.content || null;
+        } catch (e) {
+            console.error('❌ خطأ في Groq:', e.message);
+        }
     }
+
+    // 2. استخدام OpenAI في حال عدم توفر Groq أو حدوث خطأ
+    if (botSettings.aiApiKey) {
+        try {
+            const openai = new OpenAI({ apiKey: botSettings.aiApiKey });
+            const response = await openai.chat.completions.create({
+                model: "gpt-4o-mini",
+                messages: [
+                    { role: "system", content: botSettings.aiPrompt },
+                    { role: "user", content: userMessage }
+                ],
+                max_tokens: 300
+            });
+            return response.choices[0].message.content;
+        } catch (e) {
+            console.error('❌ خطأ في OpenAI:', e.message);
+        }
+    }
+
+    return null;
 }
 
 async function sendPollReply(from, optionName) {
@@ -122,7 +146,6 @@ async function initBaileys() {
         }
     });
 
-    // معالجة تصويت الاستطلاعات بحماية الأخطاء
     sock.ev.on('messages.update', async (updates) => {
         try {
             for (const update of updates) {
@@ -146,11 +169,10 @@ async function initBaileys() {
                 }
             }
         } catch (e) {
-            console.log("خطأ مؤقت في استقبال الاستطلاع واستكمال العمل:", e.message);
+            console.log("خطأ في استقبال الاستطلاع:", e.message);
         }
     });
 
-    // معالجة الرسائل والذكاء الاصطناعي بحماية الأخطاء
     sock.ev.on('messages.upsert', async ({ messages, type }) => {
         try {
             if (type !== 'notify' || !isBotActive) return;
@@ -198,12 +220,10 @@ async function initBaileys() {
             }
 
             if (rawText) {
-                if (botSettings.aiApiKey) {
-                    const aiReply = await askAI(rawText);
-                    if (aiReply) {
-                        await sock.sendMessage(from, { text: aiReply });
-                        addLog(from, '🤖 رد الذكاء الاصطناعي', 'outgoing');
-                    }
+                const aiReply = await askAI(rawText);
+                if (aiReply) {
+                    await sock.sendMessage(from, { text: aiReply });
+                    addLog(from, '🤖 رد الذكاء الاصطناعي', 'outgoing');
                 }
             }
         } catch (e) {
