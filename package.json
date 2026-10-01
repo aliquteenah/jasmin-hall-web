@@ -1,19 +1,20 @@
 {
-  "name": "whatsapp-bot",
+  "name": "jasmin-hall-web",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "WhatsApp Bot built with Node.js and Baileys",
   "type": "module",
+  "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "engines": {
-    "node": "20.x"
-  },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.18",
-    "express": "^4.19.2",
-    "groq-sdk": "^0.5.0",
-    "openai": "^4.56.0",
-    "pino": "^9.3.2"
+    "@hapi/boom": "^9.1.4",
+    "@whiskeysockets/baileys": "^6.7.12",
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.7",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.100"
   }
 }
